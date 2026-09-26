@@ -1,0 +1,80 @@
+import secrets
+
+from django.db import models
+
+
+def generate_entry_code():
+    return secrets.token_urlsafe(8)
+
+
+class Organization(models.Model):
+    """Юридическое лицо-клиент PRODEX (ТЗ: единица лицензирования Digital)."""
+
+    name = models.CharField(max_length=255)
+    legal_name = models.CharField(max_length=255, blank=True)
+    entry_code = models.CharField(
+        max_length=32,
+        unique=True,
+        default=generate_entry_code,
+        help_text="Код в корпоративной ссылке/QR, по которому участник получает токен (ТЗ FR-01).",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+class License(models.Model):
+    """Лицензия Digital: одному юрлицу на 12 месяцев (ТЗ FR-11.3)."""
+
+    STATUS_ACTIVE = "active"
+    STATUS_EXPIRED = "expired"
+    STATUS_SUSPENDED = "suspended"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Активна"),
+        (STATUS_EXPIRED, "Истекла"),
+        (STATUS_SUSPENDED, "Приостановлена"),
+    ]
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="licenses")
+    starts_at = models.DateField()
+    ends_at = models.DateField()
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.organization.name} {self.starts_at:%Y-%m-%d}–{self.ends_at:%Y-%m-%d}"
+
+
+class Stream(models.Model):
+    """Поток участников — группа, проходящая курс вместе (ТЗ FR-09.3: сравнение потоков)."""
+
+    STATUS_PLANNED = "planned"
+    STATUS_ACTIVE = "active"
+    STATUS_CLOSED = "closed"
+    STATUS_CHOICES = [
+        (STATUS_PLANNED, "Планируется"),
+        (STATUS_ACTIVE, "Активен"),
+        (STATUS_CLOSED, "Завершён"),
+    ]
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="streams")
+    code = models.CharField(max_length=64)
+    name = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PLANNED)
+    planned_start = models.DateField(null=True, blank=True)
+    planned_end = models.DateField(null=True, blank=True)
+    min_group_size = models.PositiveSmallIntegerField(
+        default=5,
+        help_text=(
+            "Минимальный размер группы для публикации агрегатов работодателю. "
+            "Значение по умолчанию временное, до подтверждения бизнесом (ТЗ FR-09.4, FR-10.3)."
+        ),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("organization", "code")]
+
+    def __str__(self):
+        return f"{self.organization.name} / {self.code}"
