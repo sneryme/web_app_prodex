@@ -10,6 +10,7 @@ from typing import Optional
 from django.utils import timezone
 
 from apps.assessments.models import AnswerResponse, Question, QuestionnaireVersion
+from apps.assessments.scoring import compute_scores_for_stage
 from apps.organizations.models import Organization, Stream
 
 from .models import ConsentRecord, ParticipantToken, StageProgress
@@ -205,4 +206,13 @@ def submit_answer(
         defaults={"selected_option": selected_option, "raw_value": raw_value},
     )
     _sync_stage_progress(token)
+    _maybe_score_stage(token, stage)
     return session_state(token)
+
+
+def _maybe_score_stage(token: ParticipantToken, stage: str) -> None:
+    """ТЗ FR-07: scoring запускается автоматически, как только этап полностью отвечен."""
+    total = len(active_questions())
+    answered = AnswerResponse.objects.filter(token=token, stage=stage).count()
+    if total and answered >= total:
+        compute_scores_for_stage(token, stage)

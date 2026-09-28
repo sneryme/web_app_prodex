@@ -18,3 +18,18 @@
 .error-banner{background:#fdecec;border:1px solid #f3b8b8;color:#8a2c2c;border-radius:14px;padding:12px 14px;font-size:14px;margin:16px 0}
 .link-button{background:none;border:0;color:#8a2c2c;text-decoration:underline;cursor:pointer;font-size:14px;padding:0}
 .hint{margin-top:14px;font-size:14px;color:#557267}
+
+/* Персональный отчёт (FR-08). Цвет — по состоянию динамики, не по конкретному тесту (см. project/*). */
+.report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:20px}
+.report-card{border-radius:18px;padding:18px 20px;border:2px solid #d7e1dc;background:#fafcfb}
+.report-card h3{font-size:15px;margin:0 0 10px;color:#324941}
+.report-card__values{display:flex;align-items:baseline;gap:8px;font-size:24px;font-weight:700;color:#17232b}
+.report-card__arrow{font-size:16px;color:#8a9a92;font-weight:400}
+.report-card__zones{font-size:13px;color:#596b64;margin:8px 0 4px}
+.report-card__trend{font-size:13px;font-weight:600;margin:0}
+.report-card--improved{border-color:#8fc9a8;background:#eef8f1}
+.report-card--improved .report-card__trend{color:#1d7a42}
+.report-card--worsened{border-color:#eab08a;background:#fdf3ec}
+.report-card--worsened .report-card__trend{color:#b0561e}
+.report-card--stable{border-color:#d7e1dc;background:#f4f6f5}
+.report-card--stable .report-card__trend{color:#66756f}

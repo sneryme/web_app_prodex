@@ -1,4 +1,4 @@
-import type { SessionState } from "./types";
+import type { PersonalReport, SessionState } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api";
 
@@ -57,4 +57,8 @@ export function submitAnswer(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function getReport(token: string): Promise<PersonalReport> {
+  return request<PersonalReport>(`/participant/reports/${encodeURIComponent(token)}/`);
 }

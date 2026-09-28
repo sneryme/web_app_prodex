@@ -6,7 +6,7 @@ import { EntryErrorScreen } from "./components/EntryErrorScreen";
 import { LandingScreen } from "./components/LandingScreen";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { QuestionFlow } from "./components/QuestionFlow";
-import { ReportPendingScreen } from "./components/ReportPendingScreen";
+import { ReportScreen } from "./components/ReportScreen";
 import { Shell } from "./components/Shell";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { clearStoredToken, loadStoredToken, storeToken } from "./storage";
@@ -20,13 +20,13 @@ type ViewState =
   | { kind: "consent"; session: SessionState }
   | { kind: "declined" }
   | { kind: "questions"; session: SessionState }
-  | { kind: "report_pending" };
+  | { kind: "report"; token: string };
 
 /** ТЗ FR-04: система сама решает, какой экран показать — по состоянию сессии, без ручного выбора. */
 function screenFromSession(session: SessionState): ViewState {
   if (session.consent_status === "declined") return { kind: "declined" };
   if (session.consent_status === "required") return { kind: "welcome", session };
-  if (session.stage === null) return { kind: "report_pending" };
+  if (session.stage === null) return { kind: "report", token: session.token };
   return { kind: "questions", session };
 }
 
@@ -111,8 +111,8 @@ export function App() {
         />
       );
       break;
-    case "report_pending":
-      content = <ReportPendingScreen />;
+    case "report":
+      content = <ReportScreen token={view.token} />;
       break;
   }
 

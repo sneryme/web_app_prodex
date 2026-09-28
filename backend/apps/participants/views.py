@@ -2,6 +2,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from apps.reporting.services import ReportNotReady, build_personal_report
+
 from . import services
 from .serializers import AnswerSerializer, ConsentSerializer, CreateSessionSerializer
 
@@ -76,3 +78,19 @@ def session_answer(request, token):
             {"detail": "Вопрос не относится к текущему этапу."}, status=status.HTTP_400_BAD_REQUEST
         )
     return Response(state)
+
+
+@api_view(["GET"])
+def session_report(request, token):
+    """FR-08: персональный отчёт «до/после». FR-08.7: неверный токен и «отчёт ещё не готов» — оба 404."""
+    participant_token, error = _get_token_or_404(token)
+    if error is not None:
+        return error
+    try:
+        report = build_personal_report(participant_token)
+    except ReportNotReady:
+        return Response(
+            {"detail": "Отчёт появится после завершения обоих этапов тестирования."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    return Response(report)

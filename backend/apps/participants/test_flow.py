@@ -232,6 +232,85 @@ def test_answering_unknown_question_is_rejected(client, organization, questionna
     assert response.status_code == 400
 
 
+# --- FR-07 + FR-08: scoring и персональный отчёт --------------------------
+
+@pytest.fixture
+def full_questionnaire(db):
+    """Все 5 отчётных показателей плюс одно дополнительное измерение EQ-5D (профиль)."""
+    specs = [
+        (QuestionnaireVersion.CODE_EQ5D, "mobility", "eq5d_mobility"),
+        (QuestionnaireVersion.CODE_EQ5D, "vas", "eq5d_vas"),
+        (QuestionnaireVersion.CODE_STAI, "situational_1", "situational_anxiety"),
+        (QuestionnaireVersion.CODE_STAI, "trait_1", "trait_anxiety"),
+        (QuestionnaireVersion.CODE_HADS, "anxiety_1", "hads_anxiety"),
+        (QuestionnaireVersion.CODE_HADS, "depression_1", "hads_depression"),
+    ]
+    versions = {}
+    questions = []
+    for code, question_code, indicator in specs:
+        version = versions.get(code)
+        if version is None:
+            version = QuestionnaireVersion.objects.create(code=code, version_label="test-v1", is_active=True)
+            versions[code] = version
+        question = Question.objects.create(
+            questionnaire_version=version,
+            order=Question.objects.filter(questionnaire_version=version).count() + 1,
+            code=question_code,
+            text=f"вопрос {question_code}",
+            indicator_code=indicator,
+        )
+        AnswerOption.objects.create(question=question, order=1, value=1, label="Совсем нет")
+        AnswerOption.objects.create(question=question, order=2, value=4, label="Сильно")
+        questions.append(question)
+    return questions
+
+
+def _complete_stage(client, token, questions, option_index):
+    for question in questions:
+        option = list(question.options.all())[option_index]
+        client.post(
+            f"/api/participant/sessions/{token.token}/answers/",
+            {"question_id": question.id, "option_id": option.id},
+            format="json",
+        )
+
+
+@pytest.mark.django_db
+def test_report_endpoint_returns_404_before_both_stages_are_complete(client, organization, full_questionnaire):
+    token = services.create_session(organization.entry_code)
+    _grant_consent(client, token)
+
+    response = client.get(f"/api/participant/reports/{token.token}/")
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_report_endpoint_returns_404_for_unknown_token(client):
+    response = client.get("/api/participant/reports/does-not-exist/")
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_report_endpoint_returns_five_cards_after_both_stages(client, organization, full_questionnaire):
+    token = services.create_session(organization.entry_code)
+    _grant_consent(client, token)
+
+    _complete_stage(client, token, full_questionnaire, option_index=1)  # baseline: все «Сильно»
+    _complete_stage(client, token, full_questionnaire, option_index=0)  # followup: все «Совсем нет»
+
+    response = client.get(f"/api/participant/reports/{token.token}/")
+    assert response.status_code == 200
+    assert len(response.data["cards"]) == 5
+    assert len(response.data["eq5d_profile"]) == 1  # eq5d_mobility — в профиле, не в карточках
+    assert {c["indicator_code"] for c in response.data["cards"]} == {
+        "eq5d_vas",
+        "situational_anxiety",
+        "trait_anxiety",
+        "hads_anxiety",
+        "hads_depression",
+    }
+
+
 @pytest.mark.django_db
 def test_answering_after_both_stages_complete_returns_conflict(client, organization, questionnaire):
     token = services.create_session(organization.entry_code)

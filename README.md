@@ -24,10 +24,11 @@ docker compose exec backend python manage.py seed_dummy_questionnaire
 
 Первая команда выводит `entry_code` — откройте `http://localhost:5173/?code=<entry_code>`.
 
-Реализован маршрут участника FR-01…FR-04, FR-06 (вход по коду, согласие, автоопределение этапа,
-прохождение вопросов с автосохранением). Scoring опросников (FR-07), персональный отчёт (FR-08),
-employer dashboard, PDF/XLSX-экспорт (FR-09, FR-10), PRODEX Admin (FR-11) и production-аутентификация
-(FR-12) ещё не реализованы — см. `project/ROADMAP.md` и `project/TEST_SCENARIOS.md`.
+Реализован маршрут участника FR-01…FR-04, FR-06…FR-08 (вход по коду, согласие, автоопределение
+этапа, прохождение вопросов с автосохранением, автоматический scoring и персональный отчёт
+«до / после»). Employer dashboard, PDF/XLSX-экспорт (FR-09, FR-10), PRODEX Admin (FR-11) и
+production-аутентификация (FR-12) ещё не реализованы — см. `project/ROADMAP.md` и
+`project/TEST_SCENARIOS.md`.
 
 ## UI/E2E-тесты
 

@@ -27,11 +27,12 @@ test.describe("FR-04 Автоматическое определение эта�
     await startTesting(page);
     await completeStage(page); // входное
     await completeStage(page); // итоговое
-    await expect(page.getByRole("heading", { name: "Вы прошли оба этапа тестирования" })).toBeVisible();
+    // FR-08 уже реализован — после обоих этапов показывается настоящий отчёт, а не заглушка.
+    await expect(page.locator(".report-grid")).toBeVisible();
     await expect(page.locator(".option-card")).toHaveCount(0);
 
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Вы прошли оба этапа тестирования" })).toBeVisible();
+    await expect(page.locator(".report-grid")).toBeVisible();
   });
 
   test("FR-04.5 итоговое нельзя начать до завершения входного (прямые вызовы API)", async ({ request }) => {

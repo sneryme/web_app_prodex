@@ -23,3 +23,30 @@ export interface SessionState {
   questions: QuestionDTO[];
   progress: { answered: number; total: number };
 }
+
+export type Trend = "improved" | "worsened" | "stable";
+
+export interface ReportCard {
+  indicator_code: string;
+  label: string;
+  before: { raw_score: number; zone: string };
+  after: { raw_score: number; zone: string };
+  change: number;
+  trend: Trend;
+}
+
+export interface Eq5dProfileItem {
+  indicator_code: string;
+  label: string;
+  before: number;
+  after: number;
+}
+
+export interface PersonalReport {
+  token: string;
+  summary: string;
+  improved_count: number;
+  total_count: number;
+  cards: ReportCard[];
+  eq5d_profile: Eq5dProfileItem[];
+}

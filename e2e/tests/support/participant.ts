@@ -26,14 +26,20 @@ export async function startTesting(page: Page, entryCode: string = DEMO_ENTRY_CO
   await acceptConsent(page);
 }
 
-export async function answerCurrentQuestion(page: Page) {
-  const previousQuestion = await page.locator(".card h2").innerText();
-  await page.locator(".option-card").first().click();
-  await expect(page.locator(".card h2")).not.toHaveText(previousQuestion);
+export async function answerCurrentQuestion(page: Page, optionIndex: number = 0) {
+  const previousQuestion = await page.locator(".card h2").first().innerText();
+  await page.locator(".option-card").nth(optionIndex).click();
+  // .first() — целевой экран после ответа не всегда один вопрос: последний ответ на этапе
+  // переводит либо на следующий этап, либо на отчёт (несколько .card-секций сразу).
+  await expect(page.locator(".card h2").first()).not.toHaveText(previousQuestion);
 }
 
-export async function completeStage(page: Page, questionCount: number = DUMMY_QUESTIONNAIRE_LENGTH) {
+export async function completeStage(
+  page: Page,
+  questionCount: number = DUMMY_QUESTIONNAIRE_LENGTH,
+  optionIndex: number = 0,
+) {
   for (let i = 0; i < questionCount; i += 1) {
-    await answerCurrentQuestion(page);
+    await answerCurrentQuestion(page, optionIndex);
   }
 }
