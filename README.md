@@ -13,7 +13,35 @@ docker compose up --build
 - Backend health: http://localhost:8000/api/health/
 - Django admin: http://localhost:8000/admin/
 
-Это каркас разработки. Scoring опросников, PDF/XLSX-экспорт и production-аутентификация ещё не реализованы.
+Чтобы пройти маршрут участника локально (вход → согласие → вопросы), нужен корпоративный код и
+опросник — оба даёт сид-заглушка (реальные версии EQ-5D/Спилбергера–Ханина/HADS ещё не подтверждены
+методологом, см. `project/DATA_PROTECTION.md`):
+
+```bash
+docker compose exec backend python manage.py seed_demo_organization
+docker compose exec backend python manage.py seed_dummy_questionnaire
+```
+
+Первая команда выводит `entry_code` — откройте `http://localhost:5173/?code=<entry_code>`.
+
+Реализован маршрут участника FR-01…FR-04, FR-06…FR-08 (вход по коду, согласие, автоопределение
+этапа, прохождение вопросов с автосохранением, автоматический scoring и персональный отчёт
+«до / после»). Employer dashboard, PDF/XLSX-экспорт (FR-09, FR-10), PRODEX Admin (FR-11) и
+production-аутентификация (FR-12) ещё не реализованы — см. `project/ROADMAP.md` и
+`project/TEST_SCENARIOS.md`.
+
+## UI/E2E-тесты
+
+Playwright, папка `e2e/`. Проект должен быть запущен (`docker compose up`), плюс обе сид-команды выше.
+
+```bash
+cd e2e
+npm install
+npx playwright install chromium
+npm test
+```
+
+Сценарии по FR-01…FR-12 описаны в `project/TEST_SCENARIOS.md`.
 
 ## Работа с GitLab
 
