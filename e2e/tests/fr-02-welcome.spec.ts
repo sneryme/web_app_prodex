@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { enterViaCorporateLink } from "./support/participant";
+import { hasHorizontalOverflow } from "./support/layout";
 
 test.describe("FR-02 Welcome-экран", () => {
   test("FR-02.1 показывает цель, время прохождения, конфиденциальность и что увидит работодатель", async ({ page }) => {
@@ -28,10 +29,7 @@ test.describe("FR-02 Welcome-экран", () => {
     // это не баг. Реальный mobile-viewport берётся из Playwright-проекта "mobile" (playwright.config.ts).
     test.skip(testInfo.project.name !== "mobile", "Проверка актуальна только для мобильного профиля");
     await enterViaCorporateLink(page);
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    expect(await hasHorizontalOverflow(page)).toBe(false);
     await expect(page.getByRole("button", { name: "Начать знакомство" })).toBeInViewport();
   });
 });

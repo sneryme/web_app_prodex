@@ -2,7 +2,7 @@
 import pytest
 from rest_framework.test import APIClient
 
-from apps.assessments.models import AnswerOption, AnswerResponse, Question, QuestionnaireVersion
+from apps.assessments.models import AnswerOption, AnswerResponse, Question, QuestionnaireVersion, TestBundle, TestBundleItem
 from apps.organizations.models import Organization
 
 from . import services
@@ -329,3 +329,49 @@ def test_answering_after_both_stages_complete_returns_conflict(client, organizat
         format="json",
     )
     assert response.status_code == 409
+
+
+# --- Комплект тестов (TestBundle) --------------------------------------
+
+@pytest.mark.django_db
+def test_active_questions_follow_order_from_active_bundle():
+    # Версии создаём в порядке HADS, EQ-5D, STAI, но в комплекте явно задаём другой порядок —
+    # active_questions() должен следовать за комплектом, а не за порядком создания/кодом.
+    hads = QuestionnaireVersion.objects.create(code=QuestionnaireVersion.CODE_HADS, version_label="v1", is_active=True)
+    eq5d = QuestionnaireVersion.objects.create(code=QuestionnaireVersion.CODE_EQ5D, version_label="v1", is_active=True)
+    stai = QuestionnaireVersion.objects.create(code=QuestionnaireVersion.CODE_STAI, version_label="v1", is_active=True)
+    for version, code in ((hads, "h1"), (eq5d, "e1"), (stai, "s1")):
+        q = Question.objects.create(questionnaire_version=version, order=1, code=code, text="…", indicator_code=code)
+        AnswerOption.objects.create(question=q, order=1, value=1, label="1")
+
+    bundle = TestBundle.objects.create(code="custom", name="Другой порядок", is_active=True)
+    TestBundleItem.objects.create(bundle=bundle, order=1, questionnaire_version=stai)
+    TestBundleItem.objects.create(bundle=bundle, order=2, questionnaire_version=hads)
+    TestBundleItem.objects.create(bundle=bundle, order=3, questionnaire_version=eq5d)
+
+    questions = services.active_questions()
+    assert [q.code for q in questions] == ["s1", "h1", "e1"]
+
+
+@pytest.mark.django_db
+def test_active_questions_falls_back_to_code_order_without_an_active_bundle():
+    # Без активного комплекта — не падаем, а используем все активные версии, упорядоченные по коду.
+    hads = QuestionnaireVersion.objects.create(code=QuestionnaireVersion.CODE_HADS, version_label="v1", is_active=True)
+    eq5d = QuestionnaireVersion.objects.create(code=QuestionnaireVersion.CODE_EQ5D, version_label="v1", is_active=True)
+    for version, code in ((hads, "h1"), (eq5d, "e1")):
+        q = Question.objects.create(questionnaire_version=version, order=1, code=code, text="…", indicator_code=code)
+        AnswerOption.objects.create(question=q, order=1, value=1, label="1")
+
+    questions = services.active_questions()
+    assert [q.code for q in questions] == ["e1", "h1"]  # "eq5d" < "hads" по алфавиту
+
+
+@pytest.mark.django_db
+def test_inactive_bundle_items_are_skipped():
+    version = QuestionnaireVersion.objects.create(code=QuestionnaireVersion.CODE_EQ5D, version_label="v1", is_active=False)
+    Question.objects.create(questionnaire_version=version, order=1, code="e1", text="…", indicator_code="e1")
+
+    bundle = TestBundle.objects.create(code="custom", name="Комплект с неактивной методикой", is_active=True)
+    TestBundleItem.objects.create(bundle=bundle, order=1, questionnaire_version=version)
+
+    assert services.active_questions() == []

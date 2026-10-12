@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import AnswerOption, AnswerResponse, Question, QuestionnaireVersion, ScoringResult
+from .models import (
+    AnswerOption,
+    AnswerResponse,
+    Question,
+    QuestionnaireVersion,
+    ScoringResult,
+    TestBundle,
+    TestBundleItem,
+)
 
 
 class QuestionInline(admin.TabularInline):
@@ -13,6 +21,18 @@ class QuestionnaireVersionAdmin(admin.ModelAdmin):
     list_display = ["code", "version_label", "is_active", "license_reference", "created_at"]
     list_filter = ["code", "is_active"]
     inlines = [QuestionInline]
+
+
+class TestBundleItemInline(admin.TabularInline):
+    model = TestBundleItem
+    extra = 0
+
+
+@admin.register(TestBundle)
+class TestBundleAdmin(admin.ModelAdmin):
+    list_display = ["code", "name", "is_active", "created_at"]
+    list_filter = ["is_active"]
+    inlines = [TestBundleItemInline]
 
 
 class AnswerOptionInline(admin.TabularInline):

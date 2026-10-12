@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { hasHorizontalOverflow } from "./support/layout";
 
 // Что реально есть в scaffold: стартовая страница участника (frontend/src/main.tsx).
 // Здесь же охранные проверки правил проекта, которые должны держаться на любом экране.
@@ -20,10 +21,7 @@ test.describe("стартовая страница участника", () => {
   });
 
   test("SMOKE-03 страница не выходит за ширину экрана (mobile-first)", async ({ page }) => {
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    expect(await hasHorizontalOverflow(page)).toBe(false);
   });
 
   test("SMOKE-04 не запрашивает прямые идентификаторы (ФИО, телефон, e-mail)", async ({ page }) => {

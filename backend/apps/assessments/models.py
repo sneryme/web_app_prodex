@@ -26,6 +26,46 @@ class QuestionnaireVersion(models.Model):
         return f"{self.get_code_display()} {self.version_label}"
 
 
+class TestBundle(models.Model):
+    """Комплект тестов — именованный набор методик в заданном порядке (ТЗ FR-05.1).
+
+    Раньше порядок методик был зашит константой `QUESTIONNAIRE_ORDER` в
+    `apps/participants/services.py`; теперь это настоящая таблица, которой может управлять
+    методолог (через admin), а не значение в коде. На один маршрут участника действует ровно
+    один активный комплект (`is_active=True`) — выбор комплекта по организации/потоку не
+    реализован, это естественная точка расширения на будущее.
+    """
+
+    __test__ = False  # имя класса совпадает с pytest-конвенцией "Test*" — это не тест-кейс
+
+    code = models.SlugField(max_length=64, unique=True)
+    name = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+class TestBundleItem(models.Model):
+    """Методика внутри комплекта и её порядковый номер в маршруте участника."""
+
+    __test__ = False
+
+    bundle = models.ForeignKey(TestBundle, on_delete=models.CASCADE, related_name="items")
+    questionnaire_version = models.ForeignKey(
+        "QuestionnaireVersion", on_delete=models.PROTECT, related_name="bundle_items"
+    )
+    order = models.PositiveSmallIntegerField()
+
+    class Meta:
+        unique_together = [("bundle", "order"), ("bundle", "questionnaire_version")]
+        ordering = ["bundle", "order"]
+
+    def __str__(self):
+        return f"{self.bundle.code}:{self.order}:{self.questionnaire_version}"
+
+
 class Question(models.Model):
     """Вопрос внутри версии методики. indicator_code — к какому из 5 отчётных показателей относится ответ."""
 

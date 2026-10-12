@@ -29,10 +29,10 @@ export function WelcomeScreen({ session, onContinue }: Props) {
           результат ему не передаётся.
         </li>
       </ul>
-      <TokenBadge token={session.token} />
       <button type="button" onClick={onContinue}>
         Начать знакомство
       </button>
+      <TokenBadge token={session.token} />
     </section>
   );
 }

@@ -1,35 +1,72 @@
-:root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#17232b;background:#eef3f0}*{box-sizing:border-box}body{margin:0}.shell{max-width:760px;margin:0 auto;padding:12vh 24px}.eyebrow{font-size:12px;letter-spacing:.18em;color:#557267;font-weight:700}h1{font-size:clamp(34px,7vw,64px);line-height:1.02;max-width:680px;margin:24px 0 16px}.lead{font-size:20px;color:#60716b}.card{background:#fff;border:1px solid #d7e1dc;border-radius:28px;padding:32px;margin-top:48px;box-shadow:0 18px 60px #b4c8be55}.tag{color:#557267;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em}.card h2{font-size:30px;margin:24px 0 12px}.card p{font-size:17px;line-height:1.6;color:#596b64}.card button{border:0;border-radius:999px;padding:15px 22px;background:#1d5142;color:#fff;font-size:16px;cursor:pointer}.note{font-size:13px;line-height:1.5;color:#718079;margin-top:24px}@media(max-width:520px){.shell{padding:48px 18px}.card{padding:24px;border-radius:22px}}
+/* Палитра и шрифты — по образцу prodex.ru (реальный бренд PRODEX: оранжевый CTA #FF6F20,
+   тёмно-бирюзовый акцент #1A7B8C, тёмно-синий #1B2738, Montserrat для заголовков). */
+:root{
+  --color-primary:#FF6F20;
+  --color-primary-dark:#e6590f;
+  --color-accent:#1A7B8C;
+  --color-navy:#1B2738;
+  --color-bg:#F2F2F2;
+  --color-surface:#FFFFFF;
+  --color-border:#E1E1E1;
+  --color-text:#1A1A1A;
+  --color-text-muted:#5C6670;
+  --color-success:#1C9B5E;
+  --color-success-bg:#EAF7F0;
+  --color-danger:#DC3545;
+  --color-danger-bg:#FDECEC;
+  --font-heading:"Montserrat",sans-serif;
+  --font-body:"Geologica",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0}
+:root{font-family:var(--font-body);color:var(--color-text);background:var(--color-bg)}
+.shell{max-width:760px;margin:0 auto;padding:12vh 24px}
+.eyebrow{font-family:var(--font-heading);font-size:12px;letter-spacing:.18em;color:var(--color-accent);font-weight:700}
+h1{font-family:var(--font-heading);font-weight:800;font-size:clamp(32px,6vw,56px);line-height:1.08;max-width:680px;margin:20px 0 16px;color:var(--color-navy)}
+.lead{font-size:18px;color:var(--color-text-muted)}
+.card{background:var(--color-surface);border:1px solid var(--color-border);border-radius:16px;padding:32px;margin-top:32px;box-shadow:0 12px 32px #1b273814}
+.tag{color:var(--color-accent);font-family:var(--font-heading);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em}
+.card h2{font-family:var(--font-heading);font-weight:700;font-size:26px;margin:20px 0 12px;color:var(--color-navy)}
+.card h3{font-family:var(--font-heading);font-weight:600}
+.card p{font-size:16px;line-height:1.6;color:var(--color-text-muted)}
+.card button{border:0;border-radius:10px;padding:14px 22px;background:var(--color-primary);color:#fff;font-family:var(--font-body);font-weight:600;font-size:16px;cursor:pointer}
+.card button:hover{background:var(--color-primary-dark)}
+.note{font-size:13px;line-height:1.5;color:var(--color-text-muted);margin-top:24px}
+@media(max-width:520px){.shell{padding:48px 18px}.card{padding:22px;border-radius:14px}}
 
 /* Экраны маршрута участника (FR-01…FR-06) */
 .card .facts{list-style:none;padding:0;margin:20px 0;display:flex;flex-direction:column;gap:10px}
-.card .facts li{font-size:15px;line-height:1.5;color:#41564d}
-.token-box{margin:20px 0;padding:14px 16px;background:#f4f8f5;border:1px dashed #b9cdc2;border-radius:16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:13px;color:#41564d}
-.token-box code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#fff;padding:4px 8px;border-radius:8px;border:1px solid #d7e1dc;word-break:break-all}
-.consent-checkbox{display:flex;align-items:flex-start;gap:10px;font-size:15px;line-height:1.5;color:#324941;margin:20px 0;cursor:pointer}
-.consent-checkbox input{margin-top:4px}
+.card .facts li{font-size:15px;line-height:1.5;color:var(--color-text)}
+.token-box{margin:20px 0;padding:14px 16px;background:var(--color-bg);border:1px dashed var(--color-border);border-radius:12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:13px;color:var(--color-text-muted)}
+.token-box code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#fff;padding:4px 8px;border-radius:6px;border:1px solid var(--color-border);word-break:break-all}
+.consent-checkbox{display:flex;align-items:flex-start;gap:10px;font-size:15px;line-height:1.5;color:var(--color-text);margin:20px 0;cursor:pointer}
+.consent-checkbox input{margin-top:4px;accent-color:var(--color-primary)}
 .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:20px}
-.card button.ghost{background:transparent;color:#1d5142;border:1px solid #b9cdc2}
+.card button.ghost{background:transparent;color:var(--color-accent);border:1px solid var(--color-border)}
+.card button.ghost:hover{background:var(--color-bg)}
 .card button:disabled{opacity:.45;cursor:not-allowed}
-.progress-track{height:8px;border-radius:999px;background:#e3ece6;margin:20px 0;overflow:hidden}
-.progress-fill{height:100%;background:#1d5142;transition:width .2s ease}
+.progress-track{height:8px;border-radius:999px;background:var(--color-bg);margin:20px 0;overflow:hidden}
+.progress-fill{height:100%;background:var(--color-primary);transition:width .2s ease}
 .option-grid{display:grid;gap:12px;margin:20px 0}
-.option-card{text-align:left;background:#fff;border:2px solid #d7e1dc;border-radius:18px;padding:16px 18px;font-size:16px;color:#233b32;cursor:pointer}
-.option-card.selected{border-color:#1d5142;background:#eef6f1}
-.error-banner{background:#fdecec;border:1px solid #f3b8b8;color:#8a2c2c;border-radius:14px;padding:12px 14px;font-size:14px;margin:16px 0}
-.link-button{background:none;border:0;color:#8a2c2c;text-decoration:underline;cursor:pointer;font-size:14px;padding:0}
-.hint{margin-top:14px;font-size:14px;color:#557267}
+/* .card-префикс поднимает специфичность выше базового ".card button", иначе вариант ответа
+   красился бы в сплошной оранжевый фон кнопки вместо карточки с рамкой. */
+.card .option-card{text-align:left;background:#fff;border:2px solid var(--color-border);border-radius:12px;padding:16px 18px;font-size:16px;color:var(--color-text);cursor:pointer}
+.card .option-card.selected{border-color:var(--color-primary);background:#fff4ec}
+.error-banner{background:var(--color-danger-bg);border:1px solid #f3b8b8;color:#8a2c2c;border-radius:10px;padding:12px 14px;font-size:14px;margin:16px 0}
+.card .link-button{background:none;border:0;color:var(--color-danger);text-decoration:underline;cursor:pointer;font-size:14px;padding:0}
+.hint{margin-top:14px;font-size:14px;color:var(--color-accent)}
 
 /* Персональный отчёт (FR-08). Цвет — по состоянию динамики, не по конкретному тесту (см. project/*). */
 .report-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:20px}
-.report-card{border-radius:18px;padding:18px 20px;border:2px solid #d7e1dc;background:#fafcfb}
-.report-card h3{font-size:15px;margin:0 0 10px;color:#324941}
-.report-card__values{display:flex;align-items:baseline;gap:8px;font-size:24px;font-weight:700;color:#17232b}
-.report-card__arrow{font-size:16px;color:#8a9a92;font-weight:400}
-.report-card__zones{font-size:13px;color:#596b64;margin:8px 0 4px}
+.report-card{border-radius:12px;padding:18px 20px;border:2px solid var(--color-border);background:var(--color-bg)}
+.report-card h3{font-size:15px;margin:0 0 10px;color:var(--color-navy)}
+.report-card__values{display:flex;align-items:baseline;gap:8px;font-size:24px;font-weight:700;color:var(--color-text);font-family:var(--font-heading)}
+.report-card__arrow{font-size:16px;color:var(--color-text-muted);font-weight:400}
+.report-card__zones{font-size:13px;color:var(--color-text-muted);margin:8px 0 4px}
 .report-card__trend{font-size:13px;font-weight:600;margin:0}
-.report-card--improved{border-color:#8fc9a8;background:#eef8f1}
-.report-card--improved .report-card__trend{color:#1d7a42}
-.report-card--worsened{border-color:#eab08a;background:#fdf3ec}
-.report-card--worsened .report-card__trend{color:#b0561e}
-.report-card--stable{border-color:#d7e1dc;background:#f4f6f5}
-.report-card--stable .report-card__trend{color:#66756f}
+.report-card--improved{border-color:#9bd6b6;background:var(--color-success-bg)}
+.report-card--improved .report-card__trend{color:var(--color-success)}
+.report-card--worsened{border-color:#eeaaaa;background:var(--color-danger-bg)}
+.report-card--worsened .report-card__trend{color:var(--color-danger)}
+.report-card--stable{border-color:var(--color-border);background:#fff}
+.report-card--stable .report-card__trend{color:var(--color-text-muted)}

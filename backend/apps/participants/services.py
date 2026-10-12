@@ -9,15 +9,11 @@ from typing import Optional
 
 from django.utils import timezone
 
-from apps.assessments.models import AnswerResponse, Question, QuestionnaireVersion
+from apps.assessments.models import AnswerResponse, Question, QuestionnaireVersion, TestBundle
 from apps.assessments.scoring import compute_scores_for_stage
 from apps.organizations.models import Organization, Stream
 
 from .models import ConsentRecord, ParticipantToken, StageProgress
-
-# Порядок методик в едином маршруте участника (ТЗ FR-05.1). Пока не подтверждён методологом —
-# зафиксирован здесь, а не выведен из алфавита/id, чтобы порядок не менялся случайно.
-QUESTIONNAIRE_ORDER = [QuestionnaireVersion.CODE_EQ5D, QuestionnaireVersion.CODE_STAI, QuestionnaireVersion.CODE_HADS]
 
 
 class EntryCodeInvalid(Exception):
@@ -41,10 +37,20 @@ class UnknownQuestion(Exception):
 
 
 def active_questions() -> list[Question]:
-    """Единый порядок вопросов для входного и итогового тестирования (ТЗ FR-05.1)."""
-    order = {code: index for index, code in enumerate(QUESTIONNAIRE_ORDER)}
-    versions = list(QuestionnaireVersion.objects.filter(is_active=True))
-    versions.sort(key=lambda version: order.get(version.code, len(order)))
+    """Единый порядок вопросов для входного и итогового тестирования (ТЗ FR-05.1).
+
+    Порядок методик берётся из активного комплекта тестов (`TestBundle`), а не из константы
+    в коде — методолог может пересобрать комплект через admin без релиза. Если активного
+    комплекта нет (например, на чистой базе до сидирования), используются все активные
+    версии методик в порядке их кода — чтобы маршрут не падал в пустоту, а дал понятную
+    (хоть и непредсказуемо упорядоченную) заглушку для разработки.
+    """
+    bundle = TestBundle.objects.filter(is_active=True).prefetch_related("items__questionnaire_version").first()
+    if bundle is not None:
+        versions = [item.questionnaire_version for item in bundle.items.all() if item.questionnaire_version.is_active]
+    else:
+        versions = list(QuestionnaireVersion.objects.filter(is_active=True).order_by("code"))
+
     questions: list[Question] = []
     for version in versions:
         questions.extend(version.questions.prefetch_related("options").order_by("order"))

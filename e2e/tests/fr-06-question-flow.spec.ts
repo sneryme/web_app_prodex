@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { answerCurrentQuestion, completeStage, startTesting } from "./support/participant";
+import { hasHorizontalOverflow } from "./support/layout";
 
 test.describe("FR-06 Один вопрос на экран, прогресс, автосохранение", () => {
   test("FR-06.1 на экране ровно один вопрос, варианты ответа — крупные карточки", async ({ page }) => {
@@ -98,10 +99,7 @@ test.describe("FR-06 Один вопрос на экран, прогресс, а
     // принудительный узкий viewport в desktop-браузере даёт ложный overflow из-за нативного скроллбара Chrome.
     await startTesting(page);
     for (let i = 0; i < 3; i += 1) {
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
-      expect(overflow).toBeLessThanOrEqual(0);
+      expect(await hasHorizontalOverflow(page)).toBe(false);
       await answerCurrentQuestion(page);
     }
   });

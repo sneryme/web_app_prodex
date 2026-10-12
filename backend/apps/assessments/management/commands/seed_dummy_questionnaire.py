@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from apps.assessments.models import AnswerOption, Question, QuestionnaireVersion
+from apps.assessments.models import AnswerOption, Question, QuestionnaireVersion, TestBundle, TestBundleItem
 
 # ЗАГЛУШКА, а не реальные EQ-5D/Спилбергер–Ханин/HADS: точные версии, формулировки и лицензии
 # должен подтвердить методолог до релиза (ТЗ FR-05). Нужна, чтобы проверять маршрут FR-01…FR-08
@@ -38,7 +38,15 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        for code, questions in DUMMY_QUESTIONS.items():
+        bundle, _ = TestBundle.objects.get_or_create(
+            code="dummy-bundle",
+            defaults={"name": "Заглушка: EQ-5D + Спилбергер–Ханин + HADS", "is_active": True},
+        )
+        if not bundle.is_active:
+            bundle.is_active = True
+            bundle.save(update_fields=["is_active"])
+
+        for bundle_order, (code, questions) in enumerate(DUMMY_QUESTIONS.items(), start=1):
             version, _ = QuestionnaireVersion.objects.get_or_create(
                 code=code,
                 version_label="dummy-v0",
@@ -47,6 +55,10 @@ class Command(BaseCommand):
             if not version.is_active:
                 version.is_active = True
                 version.save(update_fields=["is_active"])
+
+            TestBundleItem.objects.update_or_create(
+                bundle=bundle, order=bundle_order, defaults={"questionnaire_version": version}
+            )
 
             for order, (question_code, text, indicator_code, question_options) in enumerate(questions, start=1):
                 question, created = Question.objects.get_or_create(
@@ -64,4 +76,4 @@ class Command(BaseCommand):
                         question=question, order=option_order, defaults={"value": value, "label": label}
                     )
 
-        self.stdout.write(self.style.SUCCESS("Опросник-заглушка dummy-v0 готов."))
+        self.stdout.write(self.style.SUCCESS("Опросник-заглушка dummy-v0 и комплект dummy-bundle готовы."))
