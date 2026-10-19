@@ -6,7 +6,6 @@ from apps.assessments.scoring import REPORT_INDICATORS
 from apps.organizations.models import Organization
 from apps.participants.models import ParticipantToken
 
-from .models import PersonalReportSnapshot
 from .services import ReportNotReady, build_personal_report
 
 
@@ -91,12 +90,21 @@ def test_report_summary_reflects_mixed_dynamics(token):
 
 
 @pytest.mark.django_db
-def test_report_is_cached_as_a_snapshot(token):
+def test_report_is_cached_on_the_token(token):
+    # Кэш — поля report_payload/report_generated_at на самом токене (бывшая отдельная таблица
+    # PersonalReportSnapshot), поэтому "не плодить снимки" гарантировано структурой, а не constraint'ом.
     for code in REPORT_INDICATORS:
         _score(token, "baseline", code, 2)
         _score(token, "followup", code, 2)
 
-    build_personal_report(token)
-    build_personal_report(token)  # повторный вызов не должен плодить снимки
+    assert token.report_payload is None
 
-    assert PersonalReportSnapshot.objects.filter(token=token).count() == 1
+    payload = build_personal_report(token)
+    token.refresh_from_db()
+    assert token.report_payload == payload
+    assert token.report_generated_at is not None
+
+    first_generated_at = token.report_generated_at
+    build_personal_report(token)  # повторный вызов обновляет тот же кэш, а не создаёт новую запись
+    token.refresh_from_db()
+    assert token.report_generated_at >= first_generated_at

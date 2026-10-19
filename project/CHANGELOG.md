@@ -39,6 +39,16 @@
   менее закруглённые карточки/кнопки. Заодно исправлен баг специфичности CSS, из-за которого карточки
   вариантов ответа и кнопка «Повторить» заливались сплошным цветом кнопки вместо своего стиля.
 
+### Changed
+- Упрощена схема БД: таблицы `participants.StageProgress` и `reporting.PersonalReportSnapshot`
+  свёрнуты в поля `apps.participants.ParticipantToken` (`baseline_status`/`followup_status`/
+  `*_started_at`/`*_completed_at`, `report_payload`/`report_generated_at`). У обеих всегда была
+  ровно одна актуальная запись на токен — это не журнал, а текущее состояние, поэтому отдельная
+  таблица была избыточной. Таблицы, которые накапливают историю со временем (`License`, `Stream`,
+  `ConsentRecord`, `AuditEvent`, `AnswerResponse`, `TestBundleItem`, `AggregateSnapshot`,
+  `ExportArtifact`), не трогали — для них «одна строка на факт» является смыслом существования.
+  17 таблиц → 15.
+
 ### Not implemented yet
 - Реальные версии, формулы и границы зон EQ-5D, Спилбергера–Ханина и HADS (сейчас используется
   опросник-заглушка и черновой scoring; ждём подтверждения методолога — ТЗ FR-05, FR-07.1/07.2).

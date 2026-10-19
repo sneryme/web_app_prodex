@@ -13,7 +13,7 @@ from apps.assessments.models import AnswerResponse, Question, QuestionnaireVersi
 from apps.assessments.scoring import compute_scores_for_stage
 from apps.organizations.models import Organization, Stream
 
-from .models import ConsentRecord, ParticipantToken, StageProgress
+from .models import ConsentRecord, ParticipantToken
 
 
 class EntryCodeInvalid(Exception):
@@ -68,9 +68,9 @@ def create_session(entry_code: str) -> ParticipantToken:
     # координатор сможет назначить его позже (открытый вопрос, см. README «Важные ограничения»).
     stream = Stream.objects.filter(organization=organization, status=Stream.STATUS_ACTIVE).first()
 
-    token = ParticipantToken.objects.create(organization=organization, stream=stream)
-    StageProgress.objects.create(token=token, stage=StageProgress.STAGE_BASELINE)
-    return token
+    # baseline_status и т.п. уже "not_started" по умолчанию на новой записи — отдельной
+    # инициализации не нужно (раньше это была create() отдельной строки StageProgress).
+    return ParticipantToken.objects.create(organization=organization, stream=stream)
 
 
 def get_token(token_value: str) -> ParticipantToken:
@@ -103,35 +103,41 @@ def current_stage(token: ParticipantToken) -> Optional[str]:
     total = len(active_questions())
     if total == 0:
         return None
-    baseline_answered = AnswerResponse.objects.filter(token=token, stage=StageProgress.STAGE_BASELINE).count()
+    baseline_answered = AnswerResponse.objects.filter(token=token, stage=ParticipantToken.STAGE_BASELINE).count()
     if baseline_answered < total:
-        return StageProgress.STAGE_BASELINE
-    followup_answered = AnswerResponse.objects.filter(token=token, stage=StageProgress.STAGE_FOLLOWUP).count()
+        return ParticipantToken.STAGE_BASELINE
+    followup_answered = AnswerResponse.objects.filter(token=token, stage=ParticipantToken.STAGE_FOLLOWUP).count()
     if followup_answered < total:
-        return StageProgress.STAGE_FOLLOWUP
+        return ParticipantToken.STAGE_FOLLOWUP
     return None
 
 
 def _sync_stage_progress(token: ParticipantToken) -> None:
-    """StageProgress — производный кэш для будущей аналитики completion (FR-09), не источник истины."""
+    """Прогресс по этапам — производный кэш для будущей аналитики completion (FR-09), не источник истины."""
     total = len(active_questions())
-    for stage in (StageProgress.STAGE_BASELINE, StageProgress.STAGE_FOLLOWUP):
+    changed_fields = []
+    for stage in (ParticipantToken.STAGE_BASELINE, ParticipantToken.STAGE_FOLLOWUP):
         answered = AnswerResponse.objects.filter(token=token, stage=stage).count()
         if answered == 0:
-            status = StageProgress.STATUS_NOT_STARTED
+            status = ParticipantToken.PROGRESS_NOT_STARTED
         elif total and answered >= total:
-            status = StageProgress.STATUS_COMPLETED
+            status = ParticipantToken.PROGRESS_COMPLETED
         else:
-            status = StageProgress.STATUS_IN_PROGRESS
+            status = ParticipantToken.PROGRESS_IN_PROGRESS
 
-        progress, _ = StageProgress.objects.get_or_create(token=token, stage=stage)
-        if progress.status != status:
-            progress.status = status
-            if status == StageProgress.STATUS_IN_PROGRESS and not progress.started_at:
-                progress.started_at = timezone.now()
-            if status == StageProgress.STATUS_COMPLETED and not progress.completed_at:
-                progress.completed_at = timezone.now()
-            progress.save()
+        status_field, started_field, completed_field = f"{stage}_status", f"{stage}_started_at", f"{stage}_completed_at"
+        if getattr(token, status_field) != status:
+            setattr(token, status_field, status)
+            changed_fields.append(status_field)
+            if status == ParticipantToken.PROGRESS_IN_PROGRESS and not getattr(token, started_field):
+                setattr(token, started_field, timezone.now())
+                changed_fields.append(started_field)
+            if status == ParticipantToken.PROGRESS_COMPLETED and not getattr(token, completed_field):
+                setattr(token, completed_field, timezone.now())
+                changed_fields.append(completed_field)
+
+    if changed_fields:
+        token.save(update_fields=changed_fields)
 
 
 def session_state(token: ParticipantToken) -> dict:

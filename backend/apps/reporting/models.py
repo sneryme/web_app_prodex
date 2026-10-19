@@ -1,15 +1,8 @@
 from django.db import models
 
-
-class PersonalReportSnapshot(models.Model):
-    """Сформированный персональный отчёт «до/после» участника (ТЗ FR-08)."""
-
-    token = models.ForeignKey("participants.ParticipantToken", on_delete=models.CASCADE, related_name="report_snapshots")
-    payload = models.JSONField(help_text="5 показателей: было/стало/изменение/нейтральная интерпретация.")
-    generated_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"report:{self.token_id}:{self.generated_at:%Y-%m-%d}"
+# Персональный отчёт участника (бывшая таблица PersonalReportSnapshot) теперь — поля
+# report_payload/report_generated_at на apps.participants.ParticipantToken: у токена всегда
+# максимум одна актуальная запись, это не журнал. См. комментарий в participants/models.py.
 
 
 class AggregateSnapshot(models.Model):

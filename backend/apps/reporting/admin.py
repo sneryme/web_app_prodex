@@ -1,12 +1,9 @@
 from django.contrib import admin
 
-from .models import AggregateSnapshot, ExportArtifact, PersonalReportSnapshot
+from .models import AggregateSnapshot, ExportArtifact
 
-
-@admin.register(PersonalReportSnapshot)
-class PersonalReportSnapshotAdmin(admin.ModelAdmin):
-    # Только для инженерной отладки: содержит персональный результат участника.
-    list_display = ["token", "generated_at"]
+# Персональный отчёт участника теперь смотрят в ParticipantTokenAdmin (apps/participants/admin.py) —
+# поля report_payload/report_generated_at, бывшая отдельная модель PersonalReportSnapshot.
 
 
 @admin.register(AggregateSnapshot)

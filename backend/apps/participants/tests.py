@@ -1,9 +1,8 @@
 import pytest
-from django.db import IntegrityError
 
 from apps.organizations.models import Organization
 
-from .models import ConsentRecord, ParticipantToken, StageProgress
+from .models import ConsentRecord, ParticipantToken
 
 
 @pytest.mark.django_db
@@ -24,12 +23,16 @@ def test_participant_token_never_stores_direct_identifiers():
 
 
 @pytest.mark.django_db
-def test_stage_progress_is_unique_per_token_and_stage():
+def test_fresh_token_starts_with_both_stages_not_started_and_no_report():
+    # Прогресс по этапам и отчёт — поля на самом токене (бывшие StageProgress/PersonalReportSnapshot),
+    # уникальность "один статус на этап" теперь гарантирована структурой таблицы, а не constraint'ом.
     org = Organization.objects.create(name="ООО Ромашка")
     token = ParticipantToken.objects.create(organization=org)
-    StageProgress.objects.create(token=token, stage=StageProgress.STAGE_BASELINE)
-    with pytest.raises(IntegrityError):
-        StageProgress.objects.create(token=token, stage=StageProgress.STAGE_BASELINE)
+    assert token.baseline_status == ParticipantToken.PROGRESS_NOT_STARTED
+    assert token.followup_status == ParticipantToken.PROGRESS_NOT_STARTED
+    assert token.baseline_started_at is None
+    assert token.report_payload is None
+    assert token.report_generated_at is None
 
 
 @pytest.mark.django_db

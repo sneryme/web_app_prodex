@@ -6,10 +6,10 @@
 """
 from __future__ import annotations
 
+from django.utils import timezone
+
 from apps.assessments.models import Question, ScoringResult
 from apps.assessments.scoring import REPORT_INDICATOR_LABELS, REPORT_INDICATORS, trend_for
-
-from .models import PersonalReportSnapshot
 
 
 class ReportNotReady(Exception):
@@ -93,6 +93,8 @@ def build_personal_report(token) -> dict:
     }
 
     # Кэш для будущей повторной выдачи без пересчёта; ScoringResult остаётся источником истины,
-    # эта запись — просто последний собранный снимок (без уникальности по токену в модели).
-    PersonalReportSnapshot.objects.update_or_create(token=token, defaults={"payload": payload})
+    # это поле — просто последний собранный снимок (apps.participants.ParticipantToken).
+    token.report_payload = payload
+    token.report_generated_at = timezone.now()
+    token.save(update_fields=["report_payload", "report_generated_at"])
     return payload
