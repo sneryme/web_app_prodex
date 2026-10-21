@@ -3,14 +3,13 @@ import { DEMO_ENTRY_CODE, completeStage, startTesting } from "./support/particip
 
 const API_URL = process.env.E2E_API_URL ?? "http://localhost:8000/api";
 
-// Опросник-заглушка (manage.py seed_dummy_questionnaire): option index 0 = «лучшее» значение
-// для severity-вопросов (тревожность/HADS), option index 3 = «лучшее» для eq5d_vas (рейтинговая
-// шкала). Отвечая на входном этапе индексом 0, а на итоговом — индексом 3, мы получаем заведомо
-// разнонаправленную динамику: eq5d_vas улучшается, остальные 4 показателя — ухудшаются.
+// Реальные методики (manage.py seed_real_questionnaries): "min" на входном + "max" на итоговом
+// даёт заведомо разнонаправленную динамику — EQ-5D VAS улучшается (выше балл = лучше), а
+// остальные 4 показателя ухудшаются (выше балл = хуже). См. комментарий в support/participant.ts.
 async function completeBothStagesWithMixedDynamics(page: import("@playwright/test").Page) {
   await startTesting(page);
-  await completeStage(page, 6, 0); // входное
-  await completeStage(page, 6, 3); // итоговое
+  await completeStage(page, "min"); // входное
+  await completeStage(page, "max"); // итоговое
   await expect(page.locator(".report-grid")).toBeVisible();
 }
 
@@ -57,10 +56,10 @@ test.describe("FR-08 Персональный отчёт участника", ()
     await completeBothStagesWithMixedDynamics(page);
     // eq5d_mobility не входит в 5 основных карточек — он должен быть в отдельном блоке профиля.
     const cardsText = await page.locator(".report-grid").innerText();
-    expect(cardsText).not.toContain("трудности с передвижением");
+    expect(cardsText).not.toContain("Подвижность");
 
     await expect(page.getByRole("heading", { name: "Ваш профиль здоровья (EQ-5D)" })).toBeVisible();
-    await expect(page.getByText("трудности с передвижением", { exact: false })).toBeVisible();
+    await expect(page.getByText("Подвижность", { exact: false })).toBeVisible();
   });
 
   test("FR-08.6 разнонаправленная динамика даёт корректный автоматический вывод", async ({ page }) => {

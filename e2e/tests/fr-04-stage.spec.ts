@@ -45,10 +45,18 @@ test.describe("FR-04 Автоматическое определение эта�
     const questions = initialState.questions;
     expect(questions.length).toBeGreaterThan(1);
 
+    // EQ-5D VAS не имеет вариантов ответа (свободный числовой ввод 0–100) — у остальных вопросов
+    // выбираем первый вариант.
+    function answerPayload(question: (typeof questions)[number]) {
+      return question.options.length > 0
+        ? { question_id: question.id, option_id: question.options[0].id }
+        : { question_id: question.id, raw_value: "50" };
+    }
+
     // Отвечаем на все вопросы, кроме последнего, — этап должен оставаться входным всё это время.
     for (let i = 0; i < questions.length - 1; i += 1) {
       const response = await request.post(`${API_URL}/participant/sessions/${token}/answers/`, {
-        data: { question_id: questions[i].id, option_id: questions[i].options[0].id },
+        data: answerPayload(questions[i]),
       });
       const body = await response.json();
       expect(body.stage).toBe("baseline");
@@ -57,7 +65,7 @@ test.describe("FR-04 Автоматическое определение эта�
     // И только после последнего ответа сервер сам переводит участника в итоговое тестирование.
     const last = questions[questions.length - 1];
     const finalResponse = await request.post(`${API_URL}/participant/sessions/${token}/answers/`, {
-      data: { question_id: last.id, option_id: last.options[0].id },
+      data: answerPayload(last),
     });
     const finalBody = await finalResponse.json();
     expect(finalBody.stage).toBe("followup");

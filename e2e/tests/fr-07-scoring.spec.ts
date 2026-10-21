@@ -13,32 +13,45 @@ async function startSession(request: import("@playwright/test").APIRequestContex
   return token as string;
 }
 
-async function answerAll(
-  request: import("@playwright/test").APIRequestContext,
-  token: string,
-  optionIndex: number,
-) {
+/**
+ * Реальный Спилбергер–Ханин намеренно сбалансирован: 10 из 20 пунктов в каждом блоке —
+ * прямые, 10 — реверсивные (так контролируют response bias). Поэтому "всегда вариант с
+ * индексом 0 / всегда с индексом 3" — как было с единообразной опросником-заглушкой — даёт
+ * на реальных данных нулевую суммарную разницу (прямые и реверсивные пункты гасят друг друга).
+ * Выбираем по `value` (минимальный/максимальный балл конкретного вопроса), а не по индексу
+ * карточки — тогда направление консистентно независимо от реверсивности пункта.
+ */
+async function answerAll(request: import("@playwright/test").APIRequestContext, token: string, pick: "min" | "max") {
   let state = await (await request.get(`${API_URL}/participant/sessions/${token}/`)).json();
   for (const question of state.questions) {
-    const option = question.options[optionIndex];
-    const response = await request.post(`${API_URL}/participant/sessions/${token}/answers/`, {
-      data: { question_id: question.id, option_id: option.id },
-    });
+    // EQ-5D VAS не имеет вариантов ответа — это свободный числовой ввод 0–100, не карточка.
+    let data;
+    if (question.options.length > 0) {
+      const values = question.options.map((o: { value: number }) => o.value);
+      const target = pick === "min" ? Math.min(...values) : Math.max(...values);
+      const option = question.options[values.indexOf(target)];
+      data = { question_id: question.id, option_id: option.id };
+    } else {
+      data = { question_id: question.id, raw_value: pick === "min" ? "0" : "100" };
+    }
+    const response = await request.post(`${API_URL}/participant/sessions/${token}/answers/`, { data });
     state = await response.json();
   }
   return state;
 }
 
 test.describe("FR-07 Автоматический scoring и связка «до / после»", () => {
-  // Формулы и границы зон — черновые, до утверждения методологом (project/PROJECT_RULES.md №5);
-  // эталонных баллов и границ зон интерпретации от методолога пока нет.
+  // Границы зон HADS и Спилбергера–Ханина теперь реальные (см. apps/assessments/scoring.py,
+  // project/CHANGELOG.md) и проверены на backend (apps/assessments/test_scoring.py). Этих двух
+  // e2e-сценариев (эталонный набор ответов целиком через UI/API, границы зон через конкретные
+  // суммы по подшкале) пока нет — автоматизировать их через UI сложнее, чем через unit-тесты.
   scenario("FR-07.1", "эталонный набор ответов даёт ожидаемые баллы по 5 показателям");
   scenario("FR-07.2", "граничные баллы попадают в правильные зоны интерпретации");
 
   test("FR-07.3 итоговые результаты связываются со входными по токену", async ({ request }) => {
     const token = await startSession(request);
-    await answerAll(request, token, 0); // входное — везде первый вариант
-    await answerAll(request, token, 3); // итоговое — везде последний вариант
+    await answerAll(request, token, "min"); // входное
+    await answerAll(request, token, "max"); // итоговое
 
     const report = await (await request.get(`${API_URL}/participant/reports/${token}/`)).json();
     // «Связка по токену» наблюдаема как различие before/after — оба взяты из одной и той же сессии.
@@ -62,8 +75,8 @@ test.describe("FR-07 Автоматический scoring и связка «до
 
   test("FR-07.5 три методики не объединяются в общий индекс", async ({ request }) => {
     const token = await startSession(request);
-    await answerAll(request, token, 1);
-    await answerAll(request, token, 2);
+    await answerAll(request, token, "min");
+    await answerAll(request, token, "max");
 
     const report = await (await request.get(`${API_URL}/participant/reports/${token}/`)).json();
     const forbiddenKeys = ["index", "overall_score", "total_score", "combined_score"];

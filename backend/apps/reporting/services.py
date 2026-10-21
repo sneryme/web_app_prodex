@@ -16,6 +16,25 @@ class ReportNotReady(Exception):
     """Отчёт формируется только после завершения обоих этапов (ТЗ FR-04.4)."""
 
 
+# Официальные названия зон HADS из методички ("клинически/субклинически выраженная...") хранятся
+# как есть в ScoringResult.interpretation_zone (apps/assessments/scoring.py:ZONE_BOUNDARIES) — это
+# полезно для админки/методолога. Но участнику их показывать напрямую нельзя: PROJECT_RULES.md №1
+# и ТЗ FR-08.4 прямо запрещают слово «клиническая» и всё, что звучит как диагноз. Поэтому в
+# персональном отчёте (но не в БД) зона проходит через эту смягчённую формулировку.
+# ВАЖНО: конкретные формулировки — черновые, не согласованы с методологом/неймингом бренда;
+# при ревью стоит свериться с тем, как PRODEX обычно говорит об этом с участниками.
+PARTICIPANT_ZONE_LABELS = {
+    "субклинически выраженная тревога": "повышенная тревожность",
+    "клинически выраженная тревога": "высокая тревожность",
+    "субклинически выраженная депрессия": "сниженный эмоциональный фон",
+    "клинически выраженная депрессия": "выраженно сниженный эмоциональный фон",
+}
+
+
+def _participant_zone_label(zone: str) -> str:
+    return PARTICIPANT_ZONE_LABELS.get(zone, zone)
+
+
 def _eq5d_profile(token) -> list[dict]:
     """Измерения EQ-5D кроме VAS — расшифровка вместо кода, не входят в 5 карточек (ТЗ FR-08.5)."""
     profile_questions = (
@@ -76,8 +95,8 @@ def build_personal_report(token) -> dict:
             {
                 "indicator_code": code,
                 "label": REPORT_INDICATOR_LABELS[code],
-                "before": {"raw_score": float(before.raw_score), "zone": before.interpretation_zone},
-                "after": {"raw_score": float(after.raw_score), "zone": after.interpretation_zone},
+                "before": {"raw_score": float(before.raw_score), "zone": _participant_zone_label(before.interpretation_zone)},
+                "after": {"raw_score": float(after.raw_score), "zone": _participant_zone_label(after.interpretation_zone)},
                 "change": float(after.raw_score) - float(before.raw_score),
                 "trend": trend,
             }

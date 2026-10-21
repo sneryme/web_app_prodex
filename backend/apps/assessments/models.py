@@ -13,14 +13,16 @@ class QuestionnaireVersion(models.Model):
         (CODE_HADS, "HADS"),
     ]
 
-    code = models.CharField(max_length=16, choices=CODE_CHOICES)
-    version_label = models.CharField(max_length=32)
-    license_reference = models.CharField(max_length=255, blank=True)
-    is_active = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    code = models.CharField("Методика", max_length=16, choices=CODE_CHOICES)
+    version_label = models.CharField("Версия", max_length=32)
+    license_reference = models.CharField("Источник/лицензия", max_length=255, blank=True)
+    is_active = models.BooleanField("Активна", default=False)
+    created_at = models.DateTimeField("Создана", auto_now_add=True)
 
     class Meta:
         unique_together = [("code", "version_label")]
+        verbose_name = "Версия методики"
+        verbose_name_plural = "Версии методик"
 
     def __str__(self):
         return f"{self.get_code_display()} {self.version_label}"
@@ -38,10 +40,14 @@ class TestBundle(models.Model):
 
     __test__ = False  # имя класса совпадает с pytest-конвенцией "Test*" — это не тест-кейс
 
-    code = models.SlugField(max_length=64, unique=True)
-    name = models.CharField(max_length=255)
-    is_active = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    code = models.SlugField("Код", max_length=64, unique=True)
+    name = models.CharField("Название", max_length=255)
+    is_active = models.BooleanField("Активен", default=False)
+    created_at = models.DateTimeField("Создан", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Комплект тестов"
+        verbose_name_plural = "Комплекты тестов"
 
     def __str__(self):
         return self.name
@@ -52,15 +58,17 @@ class TestBundleItem(models.Model):
 
     __test__ = False
 
-    bundle = models.ForeignKey(TestBundle, on_delete=models.CASCADE, related_name="items")
+    bundle = models.ForeignKey(TestBundle, on_delete=models.CASCADE, related_name="items", verbose_name="Комплект")
     questionnaire_version = models.ForeignKey(
-        "QuestionnaireVersion", on_delete=models.PROTECT, related_name="bundle_items"
+        "QuestionnaireVersion", on_delete=models.PROTECT, related_name="bundle_items", verbose_name="Методика"
     )
-    order = models.PositiveSmallIntegerField()
+    order = models.PositiveSmallIntegerField("Порядок")
 
     class Meta:
         unique_together = [("bundle", "order"), ("bundle", "questionnaire_version")]
         ordering = ["bundle", "order"]
+        verbose_name = "Методика в комплекте"
+        verbose_name_plural = "Методики в комплекте"
 
     def __str__(self):
         return f"{self.bundle.code}:{self.order}:{self.questionnaire_version}"
@@ -69,11 +77,14 @@ class TestBundleItem(models.Model):
 class Question(models.Model):
     """Вопрос внутри версии методики. indicator_code — к какому из 5 отчётных показателей относится ответ."""
 
-    questionnaire_version = models.ForeignKey(QuestionnaireVersion, on_delete=models.CASCADE, related_name="questions")
-    order = models.PositiveSmallIntegerField()
-    code = models.CharField(max_length=64)
-    text = models.TextField()
+    questionnaire_version = models.ForeignKey(
+        QuestionnaireVersion, on_delete=models.CASCADE, related_name="questions", verbose_name="Методика"
+    )
+    order = models.PositiveSmallIntegerField("Порядок")
+    code = models.CharField("Код", max_length=64)
+    text = models.TextField("Текст вопроса")
     indicator_code = models.CharField(
+        "Код показателя",
         max_length=32,
         help_text=(
             "Например: eq5d_mobility, eq5d_vas, situational_anxiety, "
@@ -84,6 +95,8 @@ class Question(models.Model):
     class Meta:
         unique_together = [("questionnaire_version", "order")]
         ordering = ["questionnaire_version", "order"]
+        verbose_name = "Вопрос"
+        verbose_name_plural = "Вопросы"
 
     def __str__(self):
         return f"{self.questionnaire_version}:{self.code}"
@@ -92,14 +105,16 @@ class Question(models.Model):
 class AnswerOption(models.Model):
     """Вариант ответа — крупная карточка на экране участника (ТЗ FR-06.1)."""
 
-    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name="options")
-    order = models.PositiveSmallIntegerField()
-    value = models.IntegerField()
-    label = models.CharField(max_length=255)
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name="options", verbose_name="Вопрос")
+    order = models.PositiveSmallIntegerField("Порядок")
+    value = models.IntegerField("Балл")
+    label = models.CharField("Текст варианта", max_length=255)
 
     class Meta:
         unique_together = [("question", "order")]
         ordering = ["question", "order"]
+        verbose_name = "Вариант ответа"
+        verbose_name_plural = "Варианты ответа"
 
     def __str__(self):
         return f"{self.question.code}:{self.label}"
@@ -113,19 +128,31 @@ class AnswerResponse(models.Model):
         ("followup", "Итоговое тестирование"),
     ]
 
-    token = models.ForeignKey("participants.ParticipantToken", on_delete=models.CASCADE, related_name="answers")
-    stage = models.CharField(max_length=16, choices=STAGE_CHOICES)
-    question = models.ForeignKey(Question, on_delete=models.PROTECT, related_name="responses")
+    token = models.ForeignKey(
+        "participants.ParticipantToken", on_delete=models.CASCADE, related_name="answers", verbose_name="Токен"
+    )
+    stage = models.CharField("Этап", max_length=16, choices=STAGE_CHOICES)
+    question = models.ForeignKey(Question, on_delete=models.PROTECT, related_name="responses", verbose_name="Вопрос")
     selected_option = models.ForeignKey(
-        AnswerOption, on_delete=models.PROTECT, null=True, blank=True, related_name="responses"
+        AnswerOption,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="responses",
+        verbose_name="Выбранный вариант",
     )
     raw_value = models.CharField(
-        max_length=32, blank=True, help_text="Для числовых шкал вроде EQ-5D VAS, где ответ — не карточка."
+        "Числовое значение",
+        max_length=32,
+        blank=True,
+        help_text="Для числовых шкал вроде EQ-5D VAS, где ответ — не карточка.",
     )
-    answered_at = models.DateTimeField(auto_now=True)
+    answered_at = models.DateTimeField("Отвечено", auto_now=True)
 
     class Meta:
         unique_together = [("token", "stage", "question")]
+        verbose_name = "Ответ участника"
+        verbose_name_plural = "Ответы участников"
 
     def __str__(self):
         return f"{self.token_id}:{self.stage}:{self.question.code}"
@@ -136,15 +163,33 @@ class ScoringResult(models.Model):
 
     STAGE_CHOICES = AnswerResponse.STAGE_CHOICES
 
-    token = models.ForeignKey("participants.ParticipantToken", on_delete=models.CASCADE, related_name="scoring_results")
-    stage = models.CharField(max_length=16, choices=STAGE_CHOICES)
-    indicator_code = models.CharField(max_length=32)
-    raw_score = models.DecimalField(max_digits=6, decimal_places=2)
-    interpretation_zone = models.CharField(max_length=64, blank=True)
-    computed_at = models.DateTimeField(auto_now=True)
+    token = models.ForeignKey(
+        "participants.ParticipantToken", on_delete=models.CASCADE, related_name="scoring_results", verbose_name="Токен"
+    )
+    stage = models.CharField("Этап", max_length=16, choices=STAGE_CHOICES)
+    # Положение о ролях, п. 5.2: изменения методики публикуются только как новая версия и не
+    # подменяют исторические результаты. Без этой ссылки балл не отличить от балла другой версии:
+    # шкала HADS (0–21) и шкала опросника-заглушки (1–4) дают один и тот же `indicator_code`, и в
+    # одном агрегате они смешиваются. PROTECT, а не SET_NULL: обнуление вернуло бы ту же
+    # неоднозначность, из-за которой приходилось угадывать версию по числу ответов.
+    questionnaire_version = models.ForeignKey(
+        QuestionnaireVersion,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="scoring_results",
+        verbose_name="Версия методики",
+        help_text="Версия опросника, которой получен балл. Пусто только у исторических строк, чьи ответы уже удалены.",
+    )
+    indicator_code = models.CharField("Код показателя", max_length=32)
+    raw_score = models.DecimalField("Балл", max_digits=6, decimal_places=2)
+    interpretation_zone = models.CharField("Зона интерпретации", max_length=64, blank=True)
+    computed_at = models.DateTimeField("Посчитано", auto_now=True)
 
     class Meta:
         unique_together = [("token", "stage", "indicator_code")]
+        verbose_name = "Результат подсчёта"
+        verbose_name_plural = "Результаты подсчёта"
 
     def __str__(self):
         return f"{self.token_id}:{self.stage}:{self.indicator_code}={self.raw_score}"

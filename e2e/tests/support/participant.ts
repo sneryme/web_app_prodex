@@ -2,8 +2,6 @@ import { expect, type Page } from "@playwright/test";
 
 // Демо-организация создаётся командой `manage.py seed_demo_organization` (см. README).
 export const DEMO_ENTRY_CODE = "demo-entry-code";
-// Общее число вопросов в опроснике-заглушке (`manage.py seed_dummy_questionnaire`): 2 на каждую из 3 методик.
-export const DUMMY_QUESTIONNAIRE_LENGTH = 6;
 
 // Создание сессии/сохранение согласия — асинхронные запросы к API; каждый хелпер дожидается
 // видимого следствия запроса, чтобы тесты не ловили гонку с недорисованным экраном.
@@ -26,20 +24,62 @@ export async function startTesting(page: Page, entryCode: string = DEMO_ENTRY_CO
   await acceptConsent(page);
 }
 
-export async function answerCurrentQuestion(page: Page, optionIndex: number = 0) {
+async function readTotalQuestions(page: Page): Promise<number> {
+  // .tag — text-transform:uppercase в CSS, поэтому innerText() отдаёт видимый текст КАПСОМ
+  // ("...ИЗ 60"), а не как он записан в JSX ("...из 60") — регэксп должен это учитывать.
+  const tagText = await page.locator(".tag").first().innerText();
+  const match = tagText.match(/из (\d+)/i);
+  if (!match) throw new Error(`Не удалось определить количество вопросов из текста тега: "${tagText}"`);
+  return Number(match[1]);
+}
+
+/**
+ * Отвечает на текущий вопрос. Реальный набор методик (EQ-5D/HADS/Спилбергер–Ханин,
+ * `manage.py seed_real_questionnaires`) — это не единообразные 4-вариантные карточки:
+ * у измерений EQ-5D по 3 варианта, а у VAS вариантов нет вовсе (свободный числовой ввод,
+ * см. `.vas-input` в QuestionFlow.tsx). `pick` поэтому задаёт не индекс карточки, а то, какой
+ * по значению (`data-value`, см. QuestionFlow.tsx) вариант выбрать — "min"/"max" работают
+ * одинаково вне зависимости от того, сколько у вопроса вариантов и куда направлен его ключ.
+ */
+export async function answerCurrentQuestion(page: Page, pick: "min" | "max" = "min") {
   const previousQuestion = await page.locator(".card h2").first().innerText();
-  await page.locator(".option-card").nth(optionIndex).click();
+  const numericInput = page.locator('.vas-input input[type="range"]');
+
+  if (await numericInput.count()) {
+    const value = pick === "min" ? 0 : 100;
+    await numericInput.evaluate((el: HTMLInputElement, v: string) => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+      setter.call(el, v);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }, String(value));
+    await page.getByRole("button", { name: "Сохранить ответ" }).click();
+  } else {
+    const options = page.locator(".option-card");
+    const count = await options.count();
+    const values = await Promise.all(
+      Array.from({ length: count }, (_, i) => options.nth(i).getAttribute("data-value")),
+    );
+    const numericValues = values.map(Number);
+    const target = pick === "min" ? Math.min(...numericValues) : Math.max(...numericValues);
+    await options.nth(numericValues.indexOf(target)).click();
+  }
+
   // .first() — целевой экран после ответа не всегда один вопрос: последний ответ на этапе
   // переводит либо на следующий этап, либо на отчёт (несколько .card-секций сразу).
   await expect(page.locator(".card h2").first()).not.toHaveText(previousQuestion);
 }
 
-export async function completeStage(
-  page: Page,
-  questionCount: number = DUMMY_QUESTIONNAIRE_LENGTH,
-  optionIndex: number = 0,
-) {
-  for (let i = 0; i < questionCount; i += 1) {
-    await answerCurrentQuestion(page, optionIndex);
+/**
+ * Проходит этап целиком. `pick="min"` выбирает на каждом вопросе вариант с наименьшим
+ * `data-value` (0 для EQ-5D VAS, минимальный ключ для карточек), `pick="max"` — с наибольшим.
+ * Поскольку у HADS/Спилбергера–Ханина высокий балл = хуже, а у EQ-5D VAS высокий балл = лучше,
+ * пара вызовов "min" на входном + "max" на итоговом (или наоборот) всегда даёт разнонаправленную
+ * динамику — 4 "тревожных" показателя меняются в одну сторону, EQ-5D VAS в противоположную —
+ * независимо от того, как именно реверсивны конкретные пункты HADS/СШХ.
+ */
+export async function completeStage(page: Page, pick: "min" | "max" = "min") {
+  const total = await readTotalQuestions(page);
+  for (let i = 0; i < total; i += 1) {
+    await answerCurrentQuestion(page, pick);
   }
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { submitAnswer } from "../api";
 import type { SessionState } from "../types";
 import { TokenBadge } from "./TokenBadge";
@@ -30,6 +30,15 @@ export function QuestionFlow({ session, onAdvance }: Props) {
   const selectedOptionId =
     pending && pending.questionId === question.id ? pending.optionId : question.answer?.option_id ?? null;
   const canGoNext = index < total - 1 && question.answer !== null;
+  const isNumeric = question.options.length === 0;
+  const [vasValue, setVasValue] = useState(() => Number(question.answer?.raw_value ?? 50));
+
+  // Компонент не размонтируется между вопросами одного этапа (только между этапами, см. App.tsx),
+  // поэтому при переходе к другому числовому вопросу ползунок нужно синхронизировать явно.
+  useEffect(() => {
+    if (isNumeric) setVasValue(Number(question.answer?.raw_value ?? 50));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question.id]);
 
   async function selectOption(optionId: number) {
     const wasUnanswered = question.answer === null;
@@ -52,8 +61,26 @@ export function QuestionFlow({ session, onAdvance }: Props) {
     }
   }
 
+  async function submitVas() {
+    const wasUnanswered = question.answer === null;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await submitAnswer(session.token, { question_id: question.id, raw_value: String(vasValue) });
+      setSaving(false);
+      onAdvance(updated);
+      if (wasUnanswered && index < total - 1) {
+        setIndex((current) => current + 1);
+      }
+    } catch {
+      setSaving(false);
+      setError("Не удалось сохранить ответ. Проверьте соединение и повторите попытку.");
+    }
+  }
+
   function retry() {
     if (pending) void selectOption(pending.optionId);
+    else if (isNumeric) void submitVas();
   }
 
   return (
@@ -76,19 +103,38 @@ export function QuestionFlow({ session, onAdvance }: Props) {
           </button>
         </p>
       )}
-      <div className="option-grid">
-        {question.options.map((option) => (
-          <button
-            key={option.id}
-            type="button"
+      {isNumeric ? (
+        <div className="vas-input">
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={vasValue}
             disabled={saving}
-            className={option.id === selectedOptionId ? "option-card selected" : "option-card"}
-            onClick={() => void selectOption(option.id)}
-          >
-            {option.label}
+            onChange={(event) => setVasValue(Number(event.target.value))}
+          />
+          <div className="vas-value">{vasValue}</div>
+          <button type="button" disabled={saving} onClick={() => void submitVas()}>
+            Сохранить ответ
           </button>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <div className="option-grid">
+          {question.options.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              disabled={saving}
+              data-value={option.value}
+              className={option.id === selectedOptionId ? "option-card selected" : "option-card"}
+              onClick={() => void selectOption(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="actions">
         <button type="button" className="ghost" disabled={index === 0} onClick={() => setIndex((i) => i - 1)}>
           Назад

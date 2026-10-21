@@ -36,6 +36,10 @@ class UnknownQuestion(Exception):
     """question_id/option_id не относятся к активному набору вопросов текущего этапа."""
 
 
+class InvalidAnswerValue(Exception):
+    """Для вопроса со свободным числовым вводом (например EQ-5D VAS) передан не 0–100."""
+
+
 def active_questions() -> list[Question]:
     """Единый порядок вопросов для входного и итогового тестирования (ТЗ FR-05.1).
 
@@ -205,11 +209,24 @@ def submit_answer(
     if question is None:
         raise UnknownQuestion
 
+    options = question.options.all()
     selected_option = None
-    if option_id is not None:
-        selected_option = next((o for o in question.options.all() if o.id == option_id), None)
+    if options:
+        if option_id is None:
+            raise UnknownQuestion
+        selected_option = next((o for o in options if o.id == option_id), None)
         if selected_option is None:
             raise UnknownQuestion
+    else:
+        # Вопрос со свободным числовым ответом (EQ-5D VAS — своё здоровье от 0 до 100).
+        if option_id is not None:
+            raise UnknownQuestion
+        try:
+            numeric_value = int(raw_value)
+        except (TypeError, ValueError):
+            raise InvalidAnswerValue from None
+        if not (0 <= numeric_value <= 100):
+            raise InvalidAnswerValue
 
     AnswerResponse.objects.update_or_create(
         token=token,

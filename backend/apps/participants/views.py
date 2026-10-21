@@ -77,6 +77,10 @@ def session_answer(request, token):
         return Response(
             {"detail": "Вопрос не относится к текущему этапу."}, status=status.HTTP_400_BAD_REQUEST
         )
+    except services.InvalidAnswerValue:
+        return Response(
+            {"detail": "Ответ должен быть числом от 0 до 100."}, status=status.HTTP_400_BAD_REQUEST
+        )
     return Response(state)
 
 
