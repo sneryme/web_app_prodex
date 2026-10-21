@@ -8,7 +8,7 @@ ALLOWED_HOSTS = ["*"]
 INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
-    "corsheaders", "rest_framework", "apps.core",
+    "corsheaders", "rest_framework", "rest_framework.authtoken", "apps.core",
     "apps.organizations", "apps.identity", "apps.participants", "apps.assessments", "apps.reporting",
 ]
 MIDDLEWARE = [
@@ -31,4 +31,13 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CORS_ALLOW_ALL_ORIGINS = DEBUG
-REST_FRAMEWORK = {"DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"]}
+REST_FRAMEWORK = {
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    # Токен нужен только дашборду работодателя (ТЗ FR-09.1/FR-12-lite, см. apps.identity.views);
+    # маршрут участника остаётся AllowAny и не шлёт заголовок Authorization, так что на него
+    # добавление TokenAuthentication не влияет.
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.TokenAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+}

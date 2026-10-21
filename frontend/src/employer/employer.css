@@ -1,0 +1,277 @@
+/* Дашборд работодателя (ТЗ FR-09) — desktop-first, отдельный контур от participant SPA
+   (PROJECT_RULES №9). Переиспользует цветовые переменные из ../styles.css (:root),
+   но не его mobile-first контейнеры/карточки. */
+
+.employer-shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 48px 32px 80px;
+}
+
+.employer-shell--login {
+  max-width: 420px;
+  padding-top: 96px;
+}
+
+.employer-login {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 32px;
+}
+
+.employer-login h1 {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  color: var(--color-navy);
+  margin: 8px 0 8px;
+}
+
+.employer-login label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.employer-login input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  font-size: 15px;
+}
+
+.employer-login button {
+  margin-top: 8px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: none;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.employer-login button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.employer-header__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.employer-session {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.employer-session__info {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.employer-session__logout {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.employer-export {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.employer-export button {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.employer-export button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.employer-eyebrow {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.employer-header h1 {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 32px;
+  color: var(--color-navy);
+  margin: 12px 0 24px;
+}
+
+.employer-filters {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.employer-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.employer-filters select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  font-size: 15px;
+  min-width: 240px;
+  background: var(--color-surface);
+}
+
+.employer-error {
+  background: var(--color-danger-bg);
+  color: #8a2c2c;
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+.employer-loading {
+  color: var(--color-text-muted);
+}
+
+.employer-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.employer-stat {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 20px 24px;
+  text-align: center;
+}
+
+.employer-stat__value {
+  display: block;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 36px;
+  color: var(--color-navy);
+}
+
+.employer-stat__label {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.employer-indicators {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 20px;
+}
+
+.employer-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.employer-card h2 {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  color: var(--color-navy);
+  margin: 0 0 16px;
+}
+
+.employer-card__stages {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.employer-stage h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin: 0 0 8px;
+}
+
+.employer-mean {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 28px;
+  color: var(--color-navy);
+}
+
+.employer-distribution {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.employer-distribution li {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  color: var(--color-text);
+}
+
+.employer-card__trend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+}
+
+.employer-trend--improved {
+  color: var(--color-success);
+}
+.employer-trend--worsened {
+  color: var(--color-danger);
+}
+.employer-trend--stable {
+  color: var(--color-text-muted);
+}
+
+.employer-suppressed {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.employer-footnote {
+  margin-top: 32px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  max-width: 760px;
+}
