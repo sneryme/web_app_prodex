@@ -39,12 +39,46 @@
   до подтверждения методологом (см. `project/PROJECT_RULES.md` №5), контракт ответа при этом не
   изменится.
 
+## Вход сотрудника (реализовано)
+
+Лёгкая аутентификация для контура работодателя (ТЗ FR-09.1), не полный RBAC из ТЗ FR-12:
+роли на действия не разграничены, аудит ведётся только по входам и выгрузкам.
+
+- `POST /identity/login/` — тело `{ "username": "...", "password": "..." }`. Возвращает
+  `{ token, role, role_display, organization }` (`organization` = `null` для ролей, не привязанных
+  к организации). 401 при неверной паре логин/пароль, 403 если у пользователя нет
+  `identity.StaffProfile` (то есть он не сотрудник).
+- `POST /identity/logout/` — отзывает токен текущего сотрудника, 204.
+
+Токен передаётся в заголовке `Authorization: Token <key>` (DRF `TokenAuthentication`). Маршрут
+участника остаётся без аутентификации и этот заголовок не шлёт.
+
+## Агрегаты работодателя (реализовано)
+
+Все endpoints требуют токена сотрудника (`IsStaffMember`); аноним получает 401. Организация
+ограничивается ролью: `org_admin` видит только свою, `prodex_admin` — все
+(`apps/reporting/views.py::_visible_organizations`). Обращение к чужой организации даёт **404, а не
+403** — намеренно, чтобы не раскрывать существование чужого `organization_id`.
+
+- `GET /employer/organizations/` — организации, доступные текущему сотруднику: `[{id, name}]`.
+- `GET /employer/organizations/{id}/streams/` — потоки для фильтра (ТЗ FR-09.3):
+  `[{id, code, name, status, participant_count}]`.
+- `GET /employer/organizations/{id}/overview/?stream={id}` — весь дашборд одним вызовом
+  (ТЗ FR-09.2): `organization`, `stream`, `coverage.participants`,
+  `completion.{baseline_completed, followup_completed}` и `indicators` (ровно 5, каждый с
+  `baseline`/`followup`/`trend`). Группы меньше `Stream.min_group_size` отдаются **без** `mean` и
+  `zone_distribution` — только `participant_count` и `is_suppressed: true` (ТЗ FR-09.4). Ни токенов,
+  ни отдельных ответов в ответе нет и быть не может (ТЗ FR-09.5). `stream` необязателен — без него
+  агрегат по всей организации. 404, если поток не принадлежит этой организации.
+- `GET /employer/organizations/{id}/export/?kind=pdf|xlsx&stream={id}` — тот же агрегат файлом
+  (ТЗ FR-10): `application/pdf` либо `...spreadsheetml.sheet` с `Content-Disposition: attachment`.
+  Параметр называется `kind`, **не `format`**: `format` зарезервирован DRF под собственное content
+  negotiation и приводит к постороннему `Http404` вместо вызова вьюхи. 400 на неизвестный формат.
+  Каждая выгрузка пишется в `reporting.ExportArtifact` (файл) и в `identity.AuditEvent` (действие).
+
 ## Планируемые защищённые endpoints (не реализовано)
 
-- `/employer/streams` — потоки и агрегаты с фильтрами.
-- `/employer/reports` — PDF/XLSX агрегатов.
-- `/prodex/clients`, `/prodex/licenses`, `/prodex/operations` — операционный контур.
+- `/prodex/clients`, `/prodex/licenses`, `/prodex/operations` — операционный контур (ТЗ FR-11).
 
-Требуют решения по аутентификации ролей (`apps/identity.StaffProfile`) — см. `ROADMAP.md`, этап 4.
 Публичный API не должен возвращать работодателю или PRODEX индивидуальные ответы без отдельного
 юридически подтверждённого основания.
