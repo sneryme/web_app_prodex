@@ -76,9 +76,24 @@
   negotiation и приводит к постороннему `Http404` вместо вызова вьюхи. 400 на неизвестный формат.
   Каждая выгрузка пишется в `reporting.ExportArtifact` (файл) и в `identity.AuditEvent` (действие).
 
-## Планируемые защищённые endpoints (не реализовано)
+## Операционный контур PRODEX Admin (реализовано)
 
-- `/prodex/clients`, `/prodex/licenses`, `/prodex/operations` — операционный контур (ТЗ FR-11).
+Все endpoints требуют `IsProdexAdmin` (ТЗ FR-11.1): аноним получает 401, администратор организации —
+403 (не 404 — в отличие от employer-контура, здесь не нужно скрывать само существование раздела).
+
+- `GET /prodex/clients/` — таблица клиентов (ТЗ FR-11.2): `[{id, name, legal_name, license, streams_count,
+  participants_count}]`. `license` — актуальная (последняя по `ends_at`) лицензия юрлица или `null`;
+  `{id, starts_at, ends_at, status, status_display, is_expired}` (ТЗ FR-11.3). `is_expired` считается
+  от текущей даты и может не совпадать с хранимым `status`, если его давно не обновляли руками.
+  Фильтры: `?search=` (по названию), `?license_status=active|expired|suspended`.
+- `GET /prodex/licenses/` — все лицензии, включая историю перевыпуска (не только актуальная на
+  клиента): `[{..., organization: {id, name}}]`. Фильтр `?status=`.
+- `GET /prodex/operations/` — технические/операционные метрики по всей системе (ТЗ FR-11.4):
+  `organizations_count`, `licenses`/`streams`/`participants` (счётчики по статусам), `completion`,
+  `activity.new_participants_last_30d`, `errors.unscored_answer_groups` (пары участник/этап/
+  показатель с ответами, но без `ScoringResult` — в норме 0, ненулевое значение почти всегда значит
+  пропуск из-за смешанной версии методики, см. `apps/assessments/scoring.py`). Ни одного
+  психологического показателя (индикатора, зоны, балла) в ответе нет и не может быть (ТЗ FR-11.5).
 
 Публичный API не должен возвращать работодателю или PRODEX индивидуальные ответы без отдельного
 юридически подтверждённого основания.

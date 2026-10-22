@@ -1,0 +1,240 @@
+/* Операционный контур PRODEX Admin (ТЗ FR-11) — desktop-first, отдельный от employer-контура
+   (ТЗ FR-11.6, PROJECT_RULES №9): таблицы вместо карточек, свой набор классов `.prodex-*`,
+   ничего общего с employer.css. Цветовые переменные те же (../styles.css :root) — это общий
+   фирменный стиль PRODEX, а не слияние контуров. */
+
+.prodex-shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 48px 32px 80px;
+}
+
+.prodex-shell--login {
+  max-width: 420px;
+  padding-top: 96px;
+}
+
+.prodex-login {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--color-navy);
+  color: #fff;
+  border-radius: 16px;
+  padding: 32px;
+}
+
+.prodex-login h1 {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  margin: 8px 0 8px;
+}
+
+.prodex-login label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #c7ccd4;
+  font-weight: 600;
+}
+
+.prodex-login input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #3a4557;
+  background: #22304a;
+  color: #fff;
+  font-size: 15px;
+}
+
+.prodex-login button {
+  margin-top: 8px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: none;
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.prodex-login button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.prodex-header__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.prodex-session__logout {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.prodex-eyebrow {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: var(--color-navy);
+  font-weight: 700;
+}
+
+.prodex-shell--login .prodex-eyebrow {
+  color: #8fd1e0;
+}
+
+.prodex-header h1 {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 32px;
+  color: var(--color-navy);
+  margin: 12px 0 24px;
+}
+
+.prodex-section {
+  margin-bottom: 40px;
+}
+
+.prodex-section h2 {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  color: var(--color-navy);
+  margin: 0 0 16px;
+}
+
+.prodex-error {
+  background: var(--color-danger-bg);
+  color: #8a2c2c;
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+.prodex-loading {
+  color: var(--color-text-muted);
+}
+
+.prodex-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.prodex-stat {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 20px 24px;
+  text-align: center;
+}
+
+.prodex-stat--warn {
+  border-color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+
+.prodex-stat__value {
+  display: block;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 32px;
+  color: var(--color-navy);
+}
+
+.prodex-stat--warn .prodex-stat__value {
+  color: var(--color-danger);
+}
+
+.prodex-stat__label {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.prodex-filters {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.prodex-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.prodex-filters input,
+.prodex-filters select {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  font-size: 15px;
+  min-width: 220px;
+  background: var(--color-surface);
+}
+
+.prodex-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.prodex-table th,
+.prodex-table td {
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 14px;
+}
+
+.prodex-table th {
+  font-family: var(--font-heading);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+}
+
+.prodex-table tr:last-child td {
+  border-bottom: none;
+}
+
+.prodex-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.prodex-badge--expired {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.prodex-badge--none {
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+}
+
+.prodex-footnote {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  max-width: 760px;
+}

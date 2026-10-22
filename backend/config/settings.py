@@ -10,6 +10,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions", "django.contrib.messages", "django.contrib.staticfiles",
     "corsheaders", "rest_framework", "rest_framework.authtoken", "apps.core",
     "apps.organizations", "apps.identity", "apps.participants", "apps.assessments", "apps.reporting",
+    "apps.prodex",
 ]
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware", "django.middleware.security.SecurityMiddleware",
