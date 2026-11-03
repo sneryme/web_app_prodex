@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { DEMO_ENTRY_CODE, completeStage, startTesting } from "./support/participant";
+import { DEMO_ENTRY_CODE, completeStage, resumeBundle, startTesting } from "./support/participant";
 
 const API_URL = process.env.E2E_API_URL ?? "http://localhost:8000/api";
 
@@ -32,6 +32,7 @@ test.describe("FR-04 Автоматическое определение эта�
     await expect(page.locator(".option-card")).toHaveCount(0);
 
     await page.reload();
+    await resumeBundle(page);
     await expect(page.locator(".report-grid")).toBeVisible();
   });
 

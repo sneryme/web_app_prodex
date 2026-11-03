@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { DEMO_ENTRY_CODE, dismissStageIntro, enterViaCorporateLink } from "./support/participant";
+import { DEMO_ENTRY_CODE, dismissStageIntro, enterViaCorporateLink, resumeBundle } from "./support/participant";
 
 const API_URL = process.env.E2E_API_URL ?? "http://localhost:8000/api";
 
@@ -52,6 +52,8 @@ test.describe("FR-03 Экран согласий и журнал согласи�
     // (ни одного ответа), поэтому участник попадает на стартовый экран этапа, а не прямо к вопросам
     // (см. StageIntroScreen.tsx) — дожимаем его тем же способом, что и обычный вход.
     await page.reload();
+    await resumeBundle(page);
+    await page.locator('.test-menu__item[data-completed="false"]').first().click();
     await dismissStageIntro(page);
     await expect(page.locator(".progress-track")).toBeVisible();
   });

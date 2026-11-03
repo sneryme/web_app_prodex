@@ -12,7 +12,7 @@ export function TestMenuScreen({ session, onSelect, onBackToBundles }: Props) {
   const completed = session.questionnaires.filter((item) => item.answered_count === item.question_count).length;
 
   return (
-    <section className="card">
+    <section className="card" data-stage={session.stage ?? ""}>
       <span className="tag">{stageName}</span>
       <h2>{completed ? "Продолжить тестирование" : "Главное меню"}</h2>
       <p>{completed ? "Выберите следующий тест или продолжите начатый." : "Выберите тест, чтобы начать."}</p>
@@ -20,7 +20,14 @@ export function TestMenuScreen({ session, onSelect, onBackToBundles }: Props) {
         {session.questionnaires.map((item) => {
           const isComplete = item.answered_count === item.question_count;
           return (
-            <button key={item.code} type="button" className="test-menu__item" onClick={() => onSelect(item.code)}>
+            <button
+              key={item.code}
+              type="button"
+              className="test-menu__item"
+              data-questionnaire-code={item.code}
+              data-completed={isComplete ? "true" : "false"}
+              onClick={() => onSelect(item.code)}
+            >
               <span className="test-menu__name">{item.name}</span>
               <span className="test-menu__status">
                 {isComplete ? "Завершён" : item.answered_count ? `Продолжить · ${item.answered_count}/${item.question_count}` : `${item.question_count} вопросов`}

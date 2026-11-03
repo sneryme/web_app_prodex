@@ -15,6 +15,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.assessments.models import AnswerOption, Question, QuestionnaireVersion, TestBundle, TestBundleItem
+from apps.organizations.models import Organization
 
 # --- EQ-5D -------------------------------------------------------------------------------
 # 5 измерений с одинаковой структурой варианта 1/2/3 (легче/умеренно/тяжелее), плюс отдельный
@@ -242,6 +243,10 @@ class Command(BaseCommand):
             TestBundleItem.objects.update_or_create(
                 bundle=bundle, order=order, defaults={"questionnaire_version": versions_by_code[code]}
             )
+
+        demo_organization = Organization.objects.filter(entry_code="demo-entry-code").first()
+        if demo_organization is not None:
+            demo_organization.test_bundles.add(bundle)
 
         deactivated_bundles = TestBundle.objects.exclude(pk=bundle.pk).filter(is_active=True).update(is_active=False)
 

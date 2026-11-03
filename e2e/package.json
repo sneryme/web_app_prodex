@@ -8,6 +8,7 @@
     "test:ui": "playwright test --ui",
     "test:desktop": "playwright test --project=desktop",
     "test:mobile": "playwright test --project=mobile",
+    "test:bundle-flow": "playwright test --project=desktop tests/fr-13-test-bundles.spec.ts",
     "report": "playwright show-report",
     "typecheck": "tsc --noEmit"
   },

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { DEMO_ENTRY_CODE, enterViaCorporateLink } from "./support/participant";
+import { DEMO_ENTRY_CODE, enterViaCorporateLink, resumeBundle } from "./support/participant";
 
 const API_URL = process.env.E2E_API_URL ?? "http://localhost:8000/api";
 
@@ -23,6 +23,7 @@ test.describe("FR-01 Вход участника по QR/ссылке, созд�
     const token = await page.evaluate(() => window.localStorage.getItem("pez_participant_token"));
 
     await page.reload();
+    await resumeBundle(page);
     await expect(page.getByRole("heading", { name: "Добро пожаловать" })).toBeVisible();
     const tokenAfterReload = await page.evaluate(() => window.localStorage.getItem("pez_participant_token"));
     expect(tokenAfterReload).toBe(token);

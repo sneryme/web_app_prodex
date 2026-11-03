@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.assessments.models import AnswerOption, Question, QuestionnaireVersion, TestBundle, TestBundleItem
+from apps.organizations.models import Organization
 
 # ЗАГЛУШКА, а не реальные EQ-5D/Спилбергер–Ханин/HADS: точные версии, формулировки и лицензии
 # должен подтвердить методолог до релиза (ТЗ FR-05). Нужна, чтобы проверять маршрут FR-01…FR-08
@@ -75,5 +76,9 @@ class Command(BaseCommand):
                     AnswerOption.objects.update_or_create(
                         question=question, order=option_order, defaults={"value": value, "label": label}
                     )
+
+        demo_organization = Organization.objects.filter(entry_code="demo-entry-code").first()
+        if demo_organization is not None:
+            demo_organization.test_bundles.add(bundle)
 
         self.stdout.write(self.style.SUCCESS("Опросник-заглушка dummy-v0 и комплект dummy-bundle готовы."))

@@ -6,8 +6,25 @@ export const DEMO_ENTRY_CODE = "demo-entry-code";
 // Создание сессии/сохранение согласия — асинхронные запросы к API; каждый хелпер дожидается
 // видимого следствия запроса, чтобы тесты не ловили гонку с недорисованным экраном.
 
-export async function enterViaCorporateLink(page: Page, entryCode: string = DEMO_ENTRY_CODE) {
+export async function enterViaCorporateLink(page: Page, entryCode: string = DEMO_ENTRY_CODE, bundleCode?: string) {
   await page.goto(`/?code=${entryCode}`);
+  await expect(page.locator(".stream-menu, .card > button").first()).toBeVisible();
+  const streams = page.locator(".stream-menu__item");
+  if (await streams.count()) {
+    await streams.first().click();
+  } else {
+    await page.locator(".card > button").first().click();
+  }
+  await expect(page.locator(".bundle-menu__item").first()).toBeVisible();
+  const preferredBundle = bundleCode
+    ? page.locator(`.bundle-menu__item[data-bundle-code="${bundleCode}"]`)
+    : page.locator('.bundle-menu__item[data-bundle-code="prodex-v1"]');
+  if (bundleCode) {
+    await expect(preferredBundle, `Expected demo bundle ${bundleCode}; run the bundle seed commands first.`).toBeVisible();
+    await preferredBundle.click();
+  } else {
+    await (await preferredBundle.count() ? preferredBundle : page.locator(".bundle-menu__item").first()).click();
+  }
   await expect(page.getByRole("heading", { name: "Добро пожаловать" })).toBeVisible();
 }
 
@@ -30,17 +47,28 @@ export async function acceptConsent(page: Page) {
   await page.getByRole("button", { name: "Начать знакомство" }).click();
   await page.getByLabel("Я согласен(на) на обработку персональных данных в рамках тестирования").check();
   await page.getByRole("button", { name: "Продолжить" }).click();
+  await expect(page.locator(".test-menu")).toBeVisible();
+  const firstTest = page.locator('.test-menu__item[data-completed="false"]').first();
+  if (await firstTest.count()) await firstTest.click();
   await dismissStageIntro(page);
   await expect(page.locator(".progress-track")).toBeVisible();
 }
 
 /** Вход + согласие одним шагом — для тестов, которым интересен только сам процесс тестирования. */
-export async function startTesting(page: Page, entryCode: string = DEMO_ENTRY_CODE) {
-  await enterViaCorporateLink(page, entryCode);
+export async function startTesting(page: Page, entryCode: string = DEMO_ENTRY_CODE, bundleCode?: string) {
+  await enterViaCorporateLink(page, entryCode, bundleCode);
   await acceptConsent(page);
 }
 
+export async function resumeBundle(page: Page, bundleCode = "prodex-v1") {
+  const bundle = page.locator(`.bundle-menu__item[data-bundle-code="${bundleCode}"]`);
+  await expect(bundle).toBeVisible();
+  await bundle.click();
+}
+
 async function readTotalQuestions(page: Page): Promise<number> {
+  const countAttribute = await page.locator("[data-question-count]").getAttribute("data-question-count");
+  if (countAttribute !== null) return Number(countAttribute);
   // .tag — text-transform:uppercase в CSS, поэтому innerText() отдаёт видимый текст КАПСОМ
   // ("...ИЗ 60"), а не как он записан в JSX ("...из 60") — регэксп должен это учитывать.
   const tagText = await page.locator(".tag").first().innerText();
@@ -95,8 +123,27 @@ export async function answerCurrentQuestion(page: Page, pick: "min" | "max" = "m
  */
 export async function completeStage(page: Page, pick: "min" | "max" = "min") {
   await dismissStageIntro(page); // предыдущий этап мог завершиться стартовым экраном следующего
-  const total = await readTotalQuestions(page);
-  for (let i = 0; i < total; i += 1) {
-    await answerCurrentQuestion(page, pick);
+  const stageRoot = page.locator("[data-stage]").first();
+  const targetStage = await stageRoot.getAttribute("data-stage");
+  if (!targetStage) throw new Error("The current testing stage is missing.");
+
+  for (let safety = 0; safety < 20; safety += 1) {
+    if (await page.locator(".report-grid").count()) return;
+    if (await page.locator(".progress-track").count()) {
+      const total = await readTotalQuestions(page);
+      const answeredAttribute = await page.locator("[data-answered-count]").getAttribute("data-answered-count");
+      const answered = Number(answeredAttribute ?? 0);
+      for (let i = answered; i < total; i += 1) await answerCurrentQuestion(page, pick);
+      continue;
+    }
+
+    const menu = page.locator(".test-menu");
+    await expect(menu).toBeVisible();
+    const menuStage = await menu.locator("xpath=..").getAttribute("data-stage");
+    if (menuStage !== targetStage) return;
+    const unfinished = page.locator('.test-menu__item[data-completed="false"]').first();
+    if (!(await unfinished.count())) throw new Error(`No unfinished questionnaire remains in stage ${targetStage}.`);
+    await unfinished.click();
   }
+  throw new Error(`Stage ${targetStage} did not complete within the expected questionnaire count.`);
 }

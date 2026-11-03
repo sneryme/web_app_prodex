@@ -40,6 +40,7 @@ export function BundleSelectionScreen({ home, onSelect }: Props) {
               key={bundle.id}
               type="button"
               className="bundle-menu__item"
+              data-bundle-code={bundle.code}
               disabled={busyId !== null}
               onClick={() => void choose(bundle.id)}
             >

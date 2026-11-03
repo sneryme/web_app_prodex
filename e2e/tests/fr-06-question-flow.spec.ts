@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { answerCurrentQuestion, completeStage, startTesting } from "./support/participant";
+import { answerCurrentQuestion, completeStage, resumeBundle, startTesting } from "./support/participant";
 import { hasHorizontalOverflow } from "./support/layout";
 
 test.describe("FR-06 Один вопрос на экран, прогресс, автосохранение", () => {
@@ -31,6 +31,7 @@ test.describe("FR-06 Один вопрос на экран, прогресс, а
     expect(secondQuestionText).not.toBe(firstQuestionText);
 
     await page.reload();
+    await resumeBundle(page);
     await expect(page.locator(".card h2")).toHaveText(secondQuestionText);
     // Ответ на первый вопрос никуда не делся — «Назад» показывает выбранную карточку.
     await page.getByRole("button", { name: "Назад" }).click();
@@ -51,6 +52,7 @@ test.describe("FR-06 Один вопрос на экран, прогресс, а
     const reopenedContext = await browser.newContext({ storageState });
     const reopenedPage = await reopenedContext.newPage();
     await reopenedPage.goto("/");
+    await resumeBundle(reopenedPage);
     await expect(reopenedPage.locator(".card h2")).toHaveText(questionAfterOneAnswer);
     await reopenedContext.close();
   });

@@ -93,7 +93,13 @@ export function QuestionFlow({ session, questionnaireCode, onAdvance, onBackToMe
   }
 
   return (
-    <section className="card">
+    <section
+      className="card"
+      data-stage={session.stage ?? ""}
+      data-question-count={total}
+      data-answered-count={questionnaire?.answered_count ?? 0}
+      data-questionnaire-code={questionnaireCode}
+    >
       <span className="tag">
         {questionnaire?.name ?? stageLabel} · Вопрос {index + 1} из {total}
       </span>

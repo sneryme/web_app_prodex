@@ -289,10 +289,18 @@ def session_state(token: ParticipantToken, bundle: TestBundle | None = None) -> 
             )
 
     stage_status = None
-    if stage == ParticipantToken.STAGE_BASELINE:
-        stage_status = token.baseline_status
-    elif stage == ParticipantToken.STAGE_FOLLOWUP:
-        stage_status = token.followup_status
+    if stage is not None:
+        stage_answers = AnswerResponse.objects.filter(token=token, stage=stage)
+        if bundle is not None:
+            stage_answers = stage_answers.filter(bundle=bundle)
+        answered_count = stage_answers.count()
+        total_questions = len(questions)
+        if answered_count == 0:
+            stage_status = ParticipantToken.PROGRESS_NOT_STARTED
+        elif answered_count >= total_questions:
+            stage_status = ParticipantToken.PROGRESS_COMPLETED
+        else:
+            stage_status = ParticipantToken.PROGRESS_IN_PROGRESS
 
     return {
         "token": token.token,
