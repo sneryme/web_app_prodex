@@ -112,14 +112,14 @@ def trend_for(indicator_code: str, before: Decimal, after: Decimal) -> str:
     return "improved" if improved else "worsened"
 
 
-def compute_scores_for_stage(token, stage) -> list[ScoringResult]:
+def compute_scores_for_stage(token, stage, bundle=None) -> list[ScoringResult]:
     """ТЗ FR-07: автоматический scoring по всем показателям, отвеченным на этапе `stage`.
 
     Большинство вопросов — выбор карточки (`selected_option.value`). EQ-5D VAS — исключение:
     это не карточка, а свободный числовой ввод 0–100 (`raw_value`), который сам и есть балл
     показателя, а не слагаемое в сумме карточек.
     """
-    answers = AnswerResponse.objects.filter(token=token, stage=stage).select_related("question", "selected_option")
+    answers = AnswerResponse.objects.filter(token=token, stage=stage, bundle=bundle).select_related("question", "selected_option")
     totals: dict[str, int] = {}
     # Версия методики, которой получен балл (Положение о ролях, п. 5.2) — берётся из самого вопроса,
     # поэтому у каждого показателя она своя: EQ-5D, HADS и СШХ это разные QuestionnaireVersion.
@@ -156,6 +156,7 @@ def compute_scores_for_stage(token, stage) -> list[ScoringResult]:
             continue
         result, _ = ScoringResult.objects.update_or_create(
             token=token,
+            bundle=bundle,
             stage=stage,
             indicator_code=indicator_code,
             defaults={

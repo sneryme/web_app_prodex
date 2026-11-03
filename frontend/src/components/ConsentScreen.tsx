@@ -25,11 +25,13 @@ export function ConsentScreen({ session, onResult }: Props) {
         consent_type: "informed_notice",
         text_version: CONSENT_TEXT_VERSION,
         accepted: true,
+        bundle_id: session.bundle_id ?? 0,
       });
       const updated = await sendConsent(session.token, {
         consent_type: "data_processing",
         text_version: CONSENT_TEXT_VERSION,
         accepted: true,
+        bundle_id: session.bundle_id ?? 0,
       });
       onResult(updated);
     } catch {
@@ -46,6 +48,7 @@ export function ConsentScreen({ session, onResult }: Props) {
         consent_type: "data_processing",
         text_version: CONSENT_TEXT_VERSION,
         accepted: false,
+        bundle_id: session.bundle_id ?? 0,
       });
       onResult(updated);
     } catch {

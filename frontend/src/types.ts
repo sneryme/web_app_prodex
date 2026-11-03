@@ -13,17 +13,49 @@ export interface QuestionDTO {
   code: string;
   text: string;
   indicator_code: string;
+  questionnaire_code: string;
   options: AnswerOptionDTO[];
   answer: { option_id: number | null; raw_value: string } | null;
 }
 
 export interface SessionState {
   token: string;
+  bundle_id: number | null;
+  bundle_name: string;
   consent_status: ConsentStatus;
   stage: Stage;
   stage_status: StageStatus;
   questions: QuestionDTO[];
+  questionnaires: { code: string; name: string; question_count: number; answered_count: number }[];
   progress: { answered: number; total: number };
+}
+
+export interface BundleChoice {
+  id: number;
+  code: string;
+  name: string;
+  status: "not_started" | "in_progress" | "completed";
+  baseline: { answered: number; total: number };
+  followup: { answered: number; total: number };
+  questionnaires: {
+    code: string;
+    name: string;
+    question_count: number;
+    baseline_answered: number;
+    followup_answered: number;
+  }[];
+}
+
+export interface ParticipantHomeState {
+  token: string;
+  consent_status: ConsentStatus;
+  bundles: BundleChoice[];
+}
+
+export interface ParticipantStream {
+  id: number;
+  code: string;
+  name: string;
 }
 
 export type Trend = "improved" | "worsened" | "stable";

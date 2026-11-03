@@ -11,16 +11,18 @@ const TREND_LABEL: Record<string, string> = {
 
 interface Props {
   token: string;
+  bundleId: number;
+  onBackToBundles: () => void;
 }
 
 /** ТЗ FR-08: персональный отчёт «до/после». Пока отчёт не готов — показываем понятную заглушку. */
-export function ReportScreen({ token }: Props) {
+export function ReportScreen({ token, bundleId, onBackToBundles }: Props) {
   const [report, setReport] = useState<PersonalReport | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "pending">("loading");
 
   useEffect(() => {
     let cancelled = false;
-    getReport(token)
+    getReport(token, bundleId)
       .then((data) => {
         if (!cancelled) {
           setReport(data);
@@ -33,7 +35,7 @@ export function ReportScreen({ token }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, bundleId]);
 
   if (status === "loading") {
     return (
@@ -41,12 +43,15 @@ export function ReportScreen({ token }: Props) {
         <span className="tag">Загрузка</span>
         <h2>Секунду…</h2>
         <p>Считаем ваш результат.</p>
+        <button type="button" className="ghost" onClick={onBackToBundles}>
+          {"\u0412 \u0433\u043b\u0430\u0432\u043d\u043e\u0435 \u043c\u0435\u043d\u044e \u043a \u0432\u044b\u0431\u043e\u0440\u0443 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u043e\u0432"}
+        </button>
       </section>
     );
   }
 
   if (status === "pending" || report === null) {
-    return <ReportPendingScreen />;
+    return <ReportPendingScreen onBackToBundles={onBackToBundles} />;
   }
 
   return (
@@ -94,6 +99,11 @@ export function ReportScreen({ token }: Props) {
           </ul>
         </section>
       )}
+      <section className="card">
+        <button type="button" className="ghost" onClick={onBackToBundles}>
+          {"\u0412 \u0433\u043b\u0430\u0432\u043d\u043e\u0435 \u043c\u0435\u043d\u044e \u043a \u0432\u044b\u0431\u043e\u0440\u0443 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u043e\u0432"}
+        </button>
+      </section>
     </>
   );
 }

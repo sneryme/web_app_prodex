@@ -12,6 +12,13 @@ class Organization(models.Model):
 
     name = models.CharField("Название", max_length=255)
     legal_name = models.CharField("Юридическое название", max_length=255, blank=True)
+    test_bundles = models.ManyToManyField(
+        "assessments.TestBundle",
+        blank=True,
+        related_name="organizations",
+        verbose_name="Test bundles",
+        help_text="Bundles available to participants in this organization.",
+    )
     entry_code = models.CharField(
         "Код входа",
         max_length=32,

@@ -4,27 +4,31 @@ import type { SessionState } from "../types";
 
 interface Props {
   session: SessionState;
+  questionnaireCode: string;
   onAdvance: (session: SessionState) => void;
+  onBackToMenu: (session: SessionState) => void;
+  onQuestionnaireComplete: (session: SessionState) => void;
 }
 
-function initialIndex(session: SessionState): number {
-  const firstUnanswered = session.questions.findIndex((question) => question.answer === null);
-  return firstUnanswered === -1 ? Math.max(0, session.questions.length - 1) : firstUnanswered;
+function initialIndex(questions: SessionState["questions"]): number {
+  const firstUnanswered = questions.findIndex((question) => question.answer === null);
+  return firstUnanswered === -1 ? Math.max(0, questions.length - 1) : firstUnanswered;
 }
 
 /**
  * ТЗ FR-06: один вопрос на экран, прогресс, автосохранение.
- * Родитель монтирует компонент заново при смене этапа (key={session.stage}), поэтому
- * при переходе входное → итоговое индекс вопроса сам пересчитывается с нуля.
+ * Родитель монтирует компонент заново при выборе теста и смене этапа.
  */
-export function QuestionFlow({ session, onAdvance }: Props) {
-  const [index, setIndex] = useState(() => initialIndex(session));
+export function QuestionFlow({ session, questionnaireCode, onAdvance, onBackToMenu, onQuestionnaireComplete }: Props) {
+  const questions = session.questions.filter((item) => item.questionnaire_code === questionnaireCode);
+  const questionnaire = session.questionnaires.find((item) => item.code === questionnaireCode);
+  const [index, setIndex] = useState(() => initialIndex(questions));
   const [pending, setPending] = useState<{ questionId: number; optionId: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const question = session.questions[index];
-  const total = session.questions.length;
+  const question = questions[index];
+  const total = questions.length;
   const stageLabel = session.stage === "baseline" ? "Входное тестирование" : "Итоговое тестирование";
   const selectedOptionId =
     pending && pending.questionId === question.id ? pending.optionId : question.answer?.option_id ?? null;
@@ -47,10 +51,12 @@ export function QuestionFlow({ session, onAdvance }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const updated = await submitAnswer(session.token, { question_id: question.id, option_id: optionId });
+      const updated = await submitAnswer(session.token, { bundle_id: session.bundle_id ?? 0, question_id: question.id, option_id: optionId });
       setSaving(false);
       setPending(null);
-      onAdvance(updated);
+      const isQuestionnaireComplete = updated.questions.filter((item) => item.questionnaire_code === questionnaireCode).every((item) => item.answer !== null);
+      if (updated.stage !== session.stage || isQuestionnaireComplete) onQuestionnaireComplete(updated);
+      else onAdvance(updated);
       // Автопереход вперёд — только когда отвечаем на новый вопрос, а не правим прошлый (FR-06.5).
       if (wasUnanswered && index < total - 1) {
         setIndex((current) => current + 1);
@@ -67,9 +73,11 @@ export function QuestionFlow({ session, onAdvance }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const updated = await submitAnswer(session.token, { question_id: question.id, raw_value: String(vasValue) });
+      const updated = await submitAnswer(session.token, { bundle_id: session.bundle_id ?? 0, question_id: question.id, raw_value: String(vasValue) });
       setSaving(false);
-      onAdvance(updated);
+      const isQuestionnaireComplete = updated.questions.filter((item) => item.questionnaire_code === questionnaireCode).every((item) => item.answer !== null);
+      if (updated.stage !== session.stage || isQuestionnaireComplete) onQuestionnaireComplete(updated);
+      else onAdvance(updated);
       if (wasUnanswered && index < total - 1) {
         setIndex((current) => current + 1);
       }
@@ -87,12 +95,12 @@ export function QuestionFlow({ session, onAdvance }: Props) {
   return (
     <section className="card">
       <span className="tag">
-        {stageLabel} · Вопрос {index + 1} из {total}
+        {questionnaire?.name ?? stageLabel} · Вопрос {index + 1} из {total}
       </span>
       <div className="progress-track">
         <div
           className="progress-fill"
-          style={{ width: `${total ? (session.progress.answered / total) * 100 : 0}%` }}
+          style={{ width: `${total ? (questions.filter((item) => item.answer !== null).length / total) * 100 : 0}%` }}
         />
       </div>
       <h2>{question.text}</h2>
@@ -138,6 +146,9 @@ export function QuestionFlow({ session, onAdvance }: Props) {
         </div>
       )}
       <div className="actions">
+        <button type="button" className="ghost" disabled={saving} onClick={() => onBackToMenu(session)}>
+          К меню
+        </button>
         <button type="button" className="ghost" disabled={index === 0} onClick={() => setIndex((i) => i - 1)}>
           Назад
         </button>

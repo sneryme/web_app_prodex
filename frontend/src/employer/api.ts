@@ -1,5 +1,5 @@
 import { ApiError, request } from "../httpClient";
-import type { LoginResponse, OrganizationOverview, OrganizationSummary, StreamSummary } from "./types";
+import type { BundleSummary, LoginResponse, OrganizationOverview, OrganizationSummary, StreamSummary } from "./types";
 
 const TOKEN_KEY = "pez_employer_token";
 const STAFF_KEY = "pez_employer_staff";
@@ -56,8 +56,15 @@ export function getStreams(organizationId: number): Promise<StreamSummary[]> {
   return request<StreamSummary[]>(`/employer/organizations/${organizationId}/streams/`, { headers: authHeaders() });
 }
 
-export function getOverview(organizationId: number, streamId: number | null): Promise<OrganizationOverview> {
-  const query = streamId !== null ? `?stream=${streamId}` : "";
+export function getBundles(organizationId: number): Promise<BundleSummary[]> {
+  return request<BundleSummary[]>(`/employer/organizations/${organizationId}/bundles/`, { headers: authHeaders() });
+}
+
+export function getOverview(organizationId: number, streamId: number | null, bundleId: number | null): Promise<OrganizationOverview> {
+  const params = new URLSearchParams();
+  if (streamId !== null) params.set("stream", String(streamId));
+  if (bundleId !== null) params.set("bundle", String(bundleId));
+  const query = params.size ? `?${params}` : "";
   return request<OrganizationOverview>(`/employer/organizations/${organizationId}/overview/${query}`, {
     headers: authHeaders(),
   });
@@ -67,11 +74,13 @@ export function getOverview(organizationId: number, streamId: number | null): Pr
 export async function downloadExport(
   organizationId: number,
   streamId: number | null,
+  bundleId: number | null,
   format: "pdf" | "xlsx",
 ): Promise<void> {
   // "kind", не "format": "format" у DRF зарезервирован под собственное content negotiation.
   const params = new URLSearchParams({ kind: format });
   if (streamId !== null) params.set("stream", String(streamId));
+  if (bundleId !== null) params.set("bundle", String(bundleId));
   const response = await fetch(`${API_URL}/employer/organizations/${organizationId}/export/?${params}`, {
     headers: authHeaders(),
   });

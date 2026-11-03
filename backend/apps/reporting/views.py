@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from apps.assessments.models import TestBundle
 from apps.identity import services as identity_services
 from apps.identity.models import StaffProfile
 from apps.identity.permissions import IsStaffMember
@@ -48,6 +49,15 @@ def organization_streams(request, organization_id):
     return Response(employer_services.list_streams(organization))
 
 
+@api_view(["GET"])
+@permission_classes([IsStaffMember])
+def organization_bundles(request, organization_id):
+    organization, error = _get_organization_or_404(request, organization_id)
+    if error is not None:
+        return error
+    return Response(employer_services.list_bundles(organization))
+
+
 def _resolve_stream(organization, request):
     stream_id = request.query_params.get("stream")
     if not stream_id:
@@ -56,6 +66,16 @@ def _resolve_stream(organization, request):
         return Stream.objects.get(pk=stream_id, organization=organization), None
     except (Stream.DoesNotExist, ValueError):
         return None, Response({"detail": "Поток не найден в этой организации."}, status=status.HTTP_404_NOT_FOUND)
+
+
+def _resolve_bundle(organization, request):
+    bundle_id = request.query_params.get("bundle")
+    if not bundle_id:
+        return organization.test_bundles.order_by("name", "id").first(), None
+    try:
+        return organization.test_bundles.get(pk=bundle_id), None
+    except (TestBundle.DoesNotExist, ValueError):
+        return None, Response({"detail": "Комплект не найден в этой организации."}, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(["GET"])
@@ -70,7 +90,11 @@ def organization_overview(request, organization_id):
     if error is not None:
         return error
 
-    return Response(employer_services.organization_overview(organization, stream=stream))
+    bundle, error = _resolve_bundle(organization, request)
+    if error is not None:
+        return error
+
+    return Response(employer_services.organization_overview(organization, stream=stream, bundle=bundle))
 
 
 @api_view(["GET"])
@@ -85,13 +109,19 @@ def organization_export(request, organization_id):
     if error is not None:
         return error
 
+    bundle, error = _resolve_bundle(organization, request)
+    if error is not None:
+        return error
+
     # Параметр намеренно называется "kind", а не "format": "format" у DRF зарезервирован под
     # собственное content negotiation (?format=json и т.п.) и приводит к Http404 на рендеринге,
     # а не к нашей вьюхе, если передать туда незнакомое DRF значение вроде "xlsx".
     fmt = request.query_params.get("kind", "xlsx")
-    overview = employer_services.organization_overview(organization, stream=stream)
+    overview = employer_services.organization_overview(organization, stream=stream, bundle=bundle)
 
     name_part = stream.code if stream else organization.name
+    if bundle:
+        name_part = f"{name_part}-{bundle.code}"
     if fmt == "pdf":
         body = export_services.build_pdf(overview)
         content_type = "application/pdf"
@@ -117,7 +147,7 @@ def organization_export(request, organization_id):
         actor=staff_profile,
         target_type="organization",
         target_id=organization.pk,
-        metadata={"kind": fmt, "stream": stream.code if stream else None},
+        metadata={"kind": fmt, "stream": stream.code if stream else None, "bundle": bundle.code if bundle else None},
     )
 
     response = HttpResponse(body, content_type=content_type)

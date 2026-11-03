@@ -21,6 +21,12 @@ export interface StreamSummary {
   participant_count: number;
 }
 
+export interface BundleSummary {
+  id: number;
+  code: string;
+  name: string;
+}
+
 export interface StageBlock {
   participant_count: number;
   is_suppressed: boolean;
@@ -46,6 +52,7 @@ export interface IndicatorOverview {
 
 export interface OrganizationOverview {
   organization: OrganizationSummary;
+  bundle: BundleSummary | null;
   stream: { id: number; code: string; name: string } | null;
   coverage: { participants: number };
   completion: { baseline_completed: number; followup_completed: number };

@@ -35,16 +35,15 @@ def _participant_zone_label(zone: str) -> str:
     return PARTICIPANT_ZONE_LABELS.get(zone, zone)
 
 
-def _eq5d_profile(token) -> list[dict]:
+def _eq5d_profile(token, bundle=None) -> list[dict]:
     """Измерения EQ-5D кроме VAS — расшифровка вместо кода, не входят в 5 карточек (ТЗ FR-08.5)."""
-    profile_questions = (
-        Question.objects.filter(questionnaire_version__code="eq5d", questionnaire_version__is_active=True)
-        .exclude(indicator_code="eq5d_vas")
-        .order_by("order")
-    )
+    profile_questions = Question.objects.filter(questionnaire_version__code="eq5d", questionnaire_version__is_active=True)
+    if bundle is not None:
+        profile_questions = profile_questions.filter(questionnaire_version__bundle_items__bundle=bundle)
+    profile_questions = profile_questions.exclude(indicator_code="eq5d_vas").order_by("order")
 
-    baseline = {r.indicator_code: r for r in ScoringResult.objects.filter(token=token, stage="baseline")}
-    followup = {r.indicator_code: r for r in ScoringResult.objects.filter(token=token, stage="followup")}
+    baseline = {r.indicator_code: r for r in ScoringResult.objects.filter(token=token, bundle=bundle, stage="baseline")}
+    followup = {r.indicator_code: r for r in ScoringResult.objects.filter(token=token, bundle=bundle, stage="followup")}
 
     profile = []
     for question in profile_questions:
@@ -76,17 +75,17 @@ def _summary_text(trends: list[str]) -> str:
     return "Результаты имеют разнонаправленную динамику: часть показателей улучшилась, часть — нет."
 
 
-def build_personal_report(token) -> dict:
-    baseline = {r.indicator_code: r for r in ScoringResult.objects.filter(token=token, stage="baseline")}
-    followup = {r.indicator_code: r for r in ScoringResult.objects.filter(token=token, stage="followup")}
+def build_personal_report(token, bundle=None) -> dict:
+    baseline = {r.indicator_code: r for r in ScoringResult.objects.filter(token=token, bundle=bundle, stage="baseline")}
+    followup = {r.indicator_code: r for r in ScoringResult.objects.filter(token=token, bundle=bundle, stage="followup")}
 
-    missing = [code for code in REPORT_INDICATORS if code not in baseline or code not in followup]
-    if missing:
+    indicators = [code for code in REPORT_INDICATORS if code in baseline and code in followup]
+    if not indicators:
         raise ReportNotReady
 
     cards = []
     trends = []
-    for code in REPORT_INDICATORS:
+    for code in indicators:
         before = baseline[code]
         after = followup[code]
         trend = trend_for(code, before.raw_score, after.raw_score)
@@ -104,11 +103,13 @@ def build_personal_report(token) -> dict:
 
     payload = {
         "token": token.token,
+        "bundle_id": bundle.pk if bundle else None,
+        "bundle_name": bundle.name if bundle else "",
         "summary": _summary_text(trends),
         "improved_count": trends.count("improved"),
         "total_count": len(trends),
         "cards": cards,
-        "eq5d_profile": _eq5d_profile(token),
+        "eq5d_profile": _eq5d_profile(token, bundle),
     }
 
     # Кэш для будущей повторной выдачи без пересчёта; ScoringResult остаётся источником истины,

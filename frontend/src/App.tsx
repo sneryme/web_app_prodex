@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiError, createSession, getSession } from "./api";
+import { ApiError, createSession, getAvailableStreams, getSession, selectBundle } from "./api";
 import { ConsentScreen } from "./components/ConsentScreen";
 import { DeclinedScreen } from "./components/DeclinedScreen";
 import { EntryErrorScreen } from "./components/EntryErrorScreen";
@@ -8,21 +8,25 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { QuestionFlow } from "./components/QuestionFlow";
 import { ReportScreen } from "./components/ReportScreen";
 import { Shell } from "./components/Shell";
-import { StageIntroScreen } from "./components/StageIntroScreen";
+import { StreamSelectionScreen } from "./components/StreamSelectionScreen";
+import { BundleSelectionScreen } from "./components/BundleSelectionScreen";
+import { TestMenuScreen } from "./components/TestMenuScreen";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { clearStoredToken, loadStoredToken, storeToken } from "./storage";
-import type { SessionState } from "./types";
+import type { ParticipantHomeState, ParticipantStream, SessionState } from "./types";
 
 type ViewState =
   | { kind: "landing" }
   | { kind: "loading" }
+  | { kind: "stream_select"; entryCode: string; streams: ParticipantStream[] }
+  | { kind: "bundle_select"; home: ParticipantHomeState }
   | { kind: "entry_error"; message: string }
   | { kind: "welcome"; session: SessionState }
   | { kind: "consent"; session: SessionState }
   | { kind: "declined" }
-  | { kind: "stage_intro"; session: SessionState }
-  | { kind: "questions"; session: SessionState }
-  | { kind: "report"; token: string };
+  | { kind: "test_menu"; session: SessionState }
+  | { kind: "questions"; session: SessionState; questionnaireCode: string }
+  | { kind: "report"; token: string; bundleId: number };
 
 /** ТЗ FR-04: система сама решает, какой экран показать — по состоянию сессии, без ручного выбора.
  *  Этап, который ещё не начат (ни одного ответа), сначала показывает стартовый экран — тест не
@@ -31,9 +35,10 @@ type ViewState =
 function screenFromSession(session: SessionState): ViewState {
   if (session.consent_status === "declined") return { kind: "declined" };
   if (session.consent_status === "required") return { kind: "welcome", session };
-  if (session.stage === null) return { kind: "report", token: session.token };
-  if (session.stage_status === "not_started") return { kind: "stage_intro", session };
-  return { kind: "questions", session };
+  if (session.stage === null) return { kind: "report", token: session.token, bundleId: session.bundle_id ?? 0 };
+  if (session.stage_status === "not_started") return { kind: "test_menu", session };
+  const firstUnanswered = session.questions.find((question) => question.answer === null);
+  return { kind: "questions", session, questionnaireCode: firstUnanswered?.questionnaire_code ?? session.questionnaires[0]?.code ?? "" };
 }
 
 export function App() {
@@ -42,18 +47,37 @@ export function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
+    const participantToken = params.get("token");
     const storedToken = loadStoredToken();
     // React.StrictMode в dev-режиме монтирует эффект дважды — без этого флага можно было бы
     // создать две сессии на один заход и применить уже устаревший ответ поверх нового состояния.
     let cancelled = false;
 
     async function bootstrap() {
+      if (participantToken) {
+        setView({ kind: "loading" });
+        try {
+          const session = await getSession(participantToken);
+          if (cancelled) return;
+          storeToken(session.token);
+          window.history.replaceState({}, "", window.location.pathname);
+          setView({ kind: "bundle_select", home: session });
+        } catch (error) {
+          if (cancelled) return;
+          clearStoredToken();
+          window.history.replaceState({}, "", window.location.pathname);
+          const message = error instanceof ApiError ? error.message : "Could not restore this session. Please try again.";
+          setView({ kind: "entry_error", message });
+        }
+        return;
+      }
+
       // FR-01.3: сохранённый токен продолжает прежнюю сессию — приоритет перед новым кодом в URL.
       if (storedToken) {
         setView({ kind: "loading" });
         try {
           const session = await getSession(storedToken);
-          if (!cancelled) setView(screenFromSession(session));
+          if (!cancelled) setView({ kind: "bundle_select", home: session });
           return;
         } catch {
           if (!cancelled) clearStoredToken();
@@ -62,13 +86,11 @@ export function App() {
       if (code) {
         setView({ kind: "loading" });
         try {
-          const session = await createSession(code);
+          const streams = await getAvailableStreams(code);
           // Отменённый (замененный вторым запуском эффекта) инстанс не должен перезаписывать
           // localStorage/URL уже после того, как активный инстанс сохранил свою сессию.
           if (cancelled) return;
-          storeToken(session.token);
-          window.history.replaceState({}, "", window.location.pathname);
-          setView(screenFromSession(session));
+          setView({ kind: "stream_select", entryCode: code, streams });
         } catch (error) {
           if (cancelled) return;
           const message =
@@ -86,13 +108,65 @@ export function App() {
     };
   }, []);
 
+  async function startSession(entryCode: string, streamId: number | null) {
+    setView({ kind: "loading" });
+    try {
+      const home = await createSession(entryCode, streamId);
+      storeToken(home.token);
+      window.history.replaceState({}, "", window.location.pathname);
+      setView({ kind: "bundle_select", home });
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : "Could not create a session. Please try again.";
+      setView({ kind: "entry_error", message });
+    }
+  }
+
+  async function resumeSession(token: string) {
+    const home = await getSession(token);
+    storeToken(home.token);
+    window.history.replaceState({}, "", window.location.pathname);
+    setView({ kind: "bundle_select", home });
+  }
+
+  async function openBundle(token: string, bundleId: number) {
+    const session = await selectBundle(token, bundleId);
+    setView(screenFromSession(session));
+  }
+
+  async function returnToBundleMenu(token: string) {
+    try {
+      const home = await getSession(token);
+      storeToken(home.token);
+      setView({ kind: "bundle_select", home });
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : "Could not load the test bundle menu. Please try again.";
+      setView({ kind: "entry_error", message });
+    }
+  }
+
   let content;
   switch (view.kind) {
     case "landing":
-      content = <LandingScreen />;
+      content = <LandingScreen onResume={resumeSession} />;
       break;
     case "loading":
       content = <LoadingScreen />;
+      break;
+    case "stream_select":
+      content = (
+        <StreamSelectionScreen
+          streams={view.streams}
+          onSelect={(streamId) => void startSession(view.entryCode, streamId)}
+          onResume={resumeSession}
+        />
+      );
+      break;
+    case "bundle_select":
+      content = view.home.consent_status === "declined" ? (
+        <DeclinedScreen />
+      ) : (
+        <BundleSelectionScreen home={view.home} onSelect={(bundleId) => openBundle(view.home.token, bundleId)} />
+      );
       break;
     case "entry_error":
       content = <EntryErrorScreen message={view.message} />;
@@ -108,22 +182,37 @@ export function App() {
     case "declined":
       content = <DeclinedScreen />;
       break;
-    case "stage_intro":
+    case "test_menu":
       content = (
-        <StageIntroScreen session={view.session} onStart={() => setView({ kind: "questions", session: view.session })} />
+        <TestMenuScreen
+          session={view.session}
+          onSelect={(code) => setView({ kind: "questions", session: view.session, questionnaireCode: code })}
+            onBackToBundles={() => void returnToBundleMenu(view.session.token)}
+        />
       );
       break;
     case "questions":
       content = (
         <QuestionFlow
-          key={view.session.stage ?? "done"}
+          key={`${view.session.stage ?? "done"}-${view.questionnaireCode}`}
           session={view.session}
-          onAdvance={(updated) => setView(screenFromSession(updated))}
+          questionnaireCode={view.questionnaireCode}
+          onAdvance={(updated) => setView({ ...view, session: updated })}
+          onBackToMenu={(updated) => setView({ kind: "test_menu", session: updated })}
+          onQuestionnaireComplete={(updated) =>
+            setView(updated.stage === view.session.stage ? { kind: "test_menu", session: updated } : screenFromSession(updated))
+          }
         />
       );
       break;
     case "report":
-      content = <ReportScreen token={view.token} />;
+      content = (
+        <ReportScreen
+          token={view.token}
+          bundleId={view.bundleId}
+          onBackToBundles={() => void returnToBundleMenu(view.token)}
+        />
+      );
       break;
   }
 

@@ -1,22 +1,36 @@
 import { request } from "./httpClient";
-import type { PersonalReport, SessionState } from "./types";
+import type { ParticipantHomeState, ParticipantStream, PersonalReport, SessionState } from "./types";
 
 export { ApiError } from "./httpClient";
 
-export function createSession(entryCode: string): Promise<SessionState> {
-  return request<SessionState>("/participant/sessions/", {
+export function getAvailableStreams(entryCode: string): Promise<ParticipantStream[]> {
+  return request<ParticipantStream[]>("/participant/streams/", {
     method: "POST",
     body: JSON.stringify({ entry_code: entryCode }),
   });
 }
 
-export function getSession(token: string): Promise<SessionState> {
-  return request<SessionState>(`/participant/sessions/${encodeURIComponent(token)}/`);
+export function createSession(entryCode: string, streamId: number | null): Promise<ParticipantHomeState> {
+  return request<ParticipantHomeState>("/participant/sessions/", {
+    method: "POST",
+    body: JSON.stringify({ entry_code: entryCode, stream_id: streamId }),
+  });
+}
+
+export function getSession(token: string): Promise<ParticipantHomeState> {
+  return request<ParticipantHomeState>(`/participant/sessions/${encodeURIComponent(token)}/`);
+}
+
+export function selectBundle(token: string, bundleId: number): Promise<SessionState> {
+  return request<SessionState>(`/participant/sessions/${encodeURIComponent(token)}/bundles/`, {
+    method: "POST",
+    body: JSON.stringify({ bundle_id: bundleId }),
+  });
 }
 
 export function sendConsent(
   token: string,
-  payload: { consent_type: "data_processing" | "informed_notice"; text_version: string; accepted: boolean },
+  payload: { consent_type: "data_processing" | "informed_notice"; text_version: string; accepted: boolean; bundle_id: number },
 ): Promise<SessionState> {
   return request<SessionState>(`/participant/sessions/${encodeURIComponent(token)}/consents/`, {
     method: "POST",
@@ -26,7 +40,7 @@ export function sendConsent(
 
 export function submitAnswer(
   token: string,
-  payload: { question_id: number; option_id?: number | null; raw_value?: string },
+  payload: { bundle_id: number; question_id: number; option_id?: number | null; raw_value?: string },
 ): Promise<SessionState> {
   return request<SessionState>(`/participant/sessions/${encodeURIComponent(token)}/answers/`, {
     method: "POST",
@@ -34,6 +48,6 @@ export function submitAnswer(
   });
 }
 
-export function getReport(token: string): Promise<PersonalReport> {
-  return request<PersonalReport>(`/participant/reports/${encodeURIComponent(token)}/`);
+export function getReport(token: string, bundleId: number): Promise<PersonalReport> {
+  return request<PersonalReport>(`/participant/reports/${encodeURIComponent(token)}/?bundle_id=${bundleId}`);
 }

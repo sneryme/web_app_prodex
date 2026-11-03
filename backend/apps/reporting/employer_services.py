@@ -15,7 +15,9 @@ from __future__ import annotations
 
 from collections import Counter
 
-from apps.assessments.models import ScoringResult
+from django.db.models import Count
+
+from apps.assessments.models import AnswerResponse, ScoringResult, TestBundle
 from apps.assessments.scoring import REPORT_INDICATOR_LABELS, REPORT_INDICATORS, trend_for
 from apps.organizations.models import Stream
 from apps.participants.models import ParticipantToken
@@ -37,7 +39,14 @@ def list_streams(organization) -> list[dict]:
     ]
 
 
-def _published_results(tokens, **filters):
+def list_bundles(organization) -> list[dict]:
+    return [
+        {"id": bundle.id, "code": bundle.code, "name": bundle.name}
+        for bundle in organization.test_bundles.order_by("name", "id")
+    ]
+
+
+def _published_results(tokens, bundle=None, **filters):
     """Баллы только действующей версии методики (Положение о ролях, п. 5.2).
 
     Без этого фильтра агрегат складывает в одну группу по `indicator_code` баллы, посчитанные по
@@ -45,11 +54,14 @@ def _published_results(tokens, **filters):
     один и тот же код показателя. Среднее по такой смеси не значит ничего. Строки с пустой версией
     (исторические, чьи ответы уже удалены) тоже исключаются — их шкалу подтвердить нечем.
     """
-    return ScoringResult.objects.filter(token__in=tokens, questionnaire_version__is_active=True, **filters)
+    results = ScoringResult.objects.filter(token__in=tokens, questionnaire_version__is_active=True, **filters)
+    if bundle is not None:
+        results = results.filter(bundle=bundle)
+    return results
 
 
-def _stage_block(indicator_code: str, stage: str, tokens, threshold: int) -> dict:
-    results = _published_results(tokens, stage=stage, indicator_code=indicator_code)
+def _stage_block(indicator_code: str, stage: str, tokens, threshold: int, bundle=None) -> dict:
+    results = _published_results(tokens, bundle=bundle, stage=stage, indicator_code=indicator_code)
     count = results.count()
     if count < threshold:
         # ТЗ FR-09.4: ни среднего, ни распределения — только то, что группа слишком мала.
@@ -65,14 +77,14 @@ def _stage_block(indicator_code: str, stage: str, tokens, threshold: int) -> dic
     }
 
 
-def _trend_block(indicator_code: str, tokens, threshold: int) -> dict:
+def _trend_block(indicator_code: str, tokens, threshold: int, bundle=None) -> dict:
     baseline_by_token = {
         r.token_id: r.raw_score
-        for r in _published_results(tokens, stage="baseline", indicator_code=indicator_code)
+        for r in _published_results(tokens, bundle=bundle, stage="baseline", indicator_code=indicator_code)
     }
     followup_by_token = {
         r.token_id: r.raw_score
-        for r in _published_results(tokens, stage="followup", indicator_code=indicator_code)
+        for r in _published_results(tokens, bundle=bundle, stage="followup", indicator_code=indicator_code)
     }
     trends = [
         trend_for(indicator_code, before, followup_by_token[token_id])
@@ -90,11 +102,21 @@ def _trend_block(indicator_code: str, tokens, threshold: int) -> dict:
     }
 
 
-def organization_overview(organization, stream=None) -> dict:
+def organization_overview(organization, stream=None, bundle=None) -> dict:
     """Один вызов — весь дашборд: охват, completion, 5 показателей с распределением «вход/итог»."""
+    if bundle is None:
+        bundle = organization.test_bundles.order_by("name", "id").first()
     tokens = ParticipantToken.objects.filter(organization=organization)
     if stream is not None:
         tokens = tokens.filter(stream=stream)
+    total_questions = 0
+    if bundle is not None:
+        total_questions = sum(
+            item.questionnaire_version.questions.filter(questionnaire_version__is_active=True).count()
+            for item in bundle.items.all()
+        )
+        token_ids = AnswerResponse.objects.filter(bundle=bundle, token__in=tokens).values_list("token_id", flat=True).distinct()
+        tokens = tokens.filter(pk__in=token_ids)
 
     threshold = stream.min_group_size if stream is not None else DEFAULT_GROUP_THRESHOLD
 
@@ -102,20 +124,36 @@ def organization_overview(organization, stream=None) -> dict:
         {
             "indicator_code": code,
             "label": REPORT_INDICATOR_LABELS[code],
-            "baseline": _stage_block(code, "baseline", tokens, threshold),
-            "followup": _stage_block(code, "followup", tokens, threshold),
-            "trend": _trend_block(code, tokens, threshold),
+            "baseline": _stage_block(code, "baseline", tokens, threshold, bundle=bundle),
+            "followup": _stage_block(code, "followup", tokens, threshold, bundle=bundle),
+            "trend": _trend_block(code, tokens, threshold, bundle=bundle),
         }
         for code in REPORT_INDICATORS
     ]
 
     return {
         "organization": {"id": organization.id, "name": organization.name},
+        "bundle": {"id": bundle.id, "code": bundle.code, "name": bundle.name} if bundle else None,
         "stream": {"id": stream.id, "code": stream.code, "name": stream.name} if stream else None,
         "coverage": {"participants": tokens.count()},
         "completion": {
-            "baseline_completed": tokens.filter(baseline_status=ParticipantToken.PROGRESS_COMPLETED).count(),
-            "followup_completed": tokens.filter(followup_status=ParticipantToken.PROGRESS_COMPLETED).count(),
+            "baseline_completed": _completed_bundle_stage(tokens, bundle, "baseline", total_questions),
+            "followup_completed": _completed_bundle_stage(tokens, bundle, "followup", total_questions),
         },
         "indicators": indicators,
     }
+
+
+def _completed_bundle_stage(tokens, bundle, stage: str, total_questions: int) -> int:
+    if bundle is None:
+        field = "baseline_status" if stage == "baseline" else "followup_status"
+        return tokens.filter(**{field: ParticipantToken.PROGRESS_COMPLETED}).count()
+    if total_questions == 0:
+        return 0
+    return (
+        AnswerResponse.objects.filter(token__in=tokens, bundle=bundle, stage=stage)
+        .values("token_id")
+        .annotate(answer_count=Count("question_id", distinct=True))
+        .filter(answer_count__gte=total_questions)
+        .count()
+    )

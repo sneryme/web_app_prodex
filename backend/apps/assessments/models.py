@@ -149,8 +149,12 @@ class AnswerResponse(models.Model):
     )
     answered_at = models.DateTimeField("Отвечено", auto_now=True)
 
+    bundle = models.ForeignKey(
+        "TestBundle", on_delete=models.PROTECT, null=True, blank=True, related_name="responses", verbose_name="Test bundle"
+    )
+
     class Meta:
-        unique_together = [("token", "stage", "question")]
+        unique_together = [("token", "bundle", "stage", "question")]
         verbose_name = "Ответ участника"
         verbose_name_plural = "Ответы участников"
 
@@ -162,6 +166,10 @@ class ScoringResult(models.Model):
     """Посчитанный балл по показателю. Методики не объединяются в общий индекс (PROJECT_RULES №2)."""
 
     STAGE_CHOICES = AnswerResponse.STAGE_CHOICES
+
+    bundle = models.ForeignKey(
+        "TestBundle", on_delete=models.PROTECT, null=True, blank=True, related_name="scoring_results", verbose_name="Test bundle"
+    )
 
     token = models.ForeignKey(
         "participants.ParticipantToken", on_delete=models.CASCADE, related_name="scoring_results", verbose_name="Токен"
@@ -187,7 +195,7 @@ class ScoringResult(models.Model):
     computed_at = models.DateTimeField("Посчитано", auto_now=True)
 
     class Meta:
-        unique_together = [("token", "stage", "indicator_code")]
+        unique_together = [("token", "bundle", "stage", "indicator_code")]
         verbose_name = "Результат подсчёта"
         verbose_name_plural = "Результаты подсчёта"
 

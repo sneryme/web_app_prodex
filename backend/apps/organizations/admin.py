@@ -7,6 +7,7 @@ from .models import License, Organization, Stream
 class OrganizationAdmin(admin.ModelAdmin):
     list_display = ["name", "legal_name", "entry_code", "created_at"]
     search_fields = ["name", "legal_name", "entry_code"]
+    filter_horizontal = ["test_bundles"]
 
 
 @admin.register(License)
@@ -17,6 +18,6 @@ class LicenseAdmin(admin.ModelAdmin):
 
 @admin.register(Stream)
 class StreamAdmin(admin.ModelAdmin):
-    list_display = ["organization", "code", "status", "planned_start", "planned_end", "min_group_size"]
-    list_filter = ["status"]
-    search_fields = ["code", "name"]
+    list_display = ["organization", "name", "code", "status", "planned_start", "planned_end", "min_group_size"]
+    list_filter = ["organization", "status"]
+    search_fields = ["organization__name", "code", "name"]

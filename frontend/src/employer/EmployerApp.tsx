@@ -3,6 +3,7 @@ import { ApiError } from "../httpClient";
 import {
   clearSession,
   downloadExport,
+  getBundles,
   getOrganizations,
   getOverview,
   getStaffInfo,
@@ -13,7 +14,7 @@ import {
   setSession,
   type StaffInfo,
 } from "./api";
-import type { OrganizationOverview, OrganizationSummary, StreamSummary } from "./types";
+import type { BundleSummary, OrganizationOverview, OrganizationSummary, StreamSummary } from "./types";
 
 const TREND_LABEL: Record<string, string> = { improved: "Улучшение", worsened: "Ухудшение", stable: "Без изменений" };
 
@@ -96,6 +97,8 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
   const [organizationId, setOrganizationId] = useState<number | null>(null);
   const [streams, setStreams] = useState<StreamSummary[] | null>(null);
   const [streamId, setStreamId] = useState<number | null>(null);
+  const [bundles, setBundles] = useState<BundleSummary[] | null>(null);
+  const [bundleId, setBundleId] = useState<number | null>(null);
   const [overview, setOverview] = useState<OrganizationOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
@@ -128,13 +131,23 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
 
   useEffect(() => {
     if (organizationId === null) return;
-    getOverview(organizationId, streamId)
+    setBundles(null);
+    setBundleId(null);
+    getBundles(organizationId).then((items) => {
+      setBundles(items);
+      setBundleId(items[0]?.id ?? null);
+    }).catch((e) => handleError(e, "Не удалось загрузить комплекты тестов."));
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (organizationId === null || bundles === null) return;
+    getOverview(organizationId, streamId, bundleId)
       .then((data) => {
         setOverview(data);
         setError(null);
       })
       .catch((e) => handleError(e, "Не удалось загрузить агрегаты."));
-  }, [organizationId, streamId]);
+  }, [organizationId, streamId, bundleId, bundles]);
 
   async function handleLogout() {
     try {
@@ -149,7 +162,7 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
     if (organizationId === null) return;
     setExporting(format);
     try {
-      await downloadExport(organizationId, streamId, format);
+      await downloadExport(organizationId, streamId, bundleId, format);
     } catch (e) {
       handleError(e, "Не удалось сформировать экспорт.");
     } finally {
@@ -203,6 +216,18 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
                   {stream.code}
                   {stream.name ? ` · ${stream.name}` : ""} ({stream.participant_count})
                 </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Комплект тестов
+            <select
+              value={bundleId ?? ""}
+              onChange={(e) => setBundleId(e.target.value ? Number(e.target.value) : null)}
+              disabled={!bundles}
+            >
+              {(bundles ?? []).map((bundle) => (
+                <option key={bundle.id} value={bundle.id}>{bundle.name}</option>
               ))}
             </select>
           </label>

@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { ResumeSessionForm } from "./ResumeSessionForm";
 
 /** Публичная страница без корпоративного кода — не функциональный вход, а общее описание сервиса. */
-export function LandingScreen() {
+export function LandingScreen({ onResume }: { onResume: (token: string) => Promise<void> }) {
   const [showHint, setShowHint] = useState(false);
 
   return (
@@ -20,6 +21,7 @@ export function LandingScreen() {
           Чтобы начать, перейдите по ссылке или QR-коду, который прислал ваш работодатель.
         </p>
       )}
+      <ResumeSessionForm onResume={onResume} />
     </section>
   );
 }
