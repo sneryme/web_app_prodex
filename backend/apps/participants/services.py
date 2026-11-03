@@ -183,11 +183,24 @@ def session_state(token: ParticipantToken) -> dict:
                 }
             )
 
+    # Статус текущего этапа — чтобы фронтенд решал, показывать стартовый экран этапа или сразу
+    # возвращать к уже начатым вопросам (иначе перезагрузка страницы посреди теста откатывала бы
+    # участника на стартовый экран, а не на тот же вопрос — ТЗ FR-06.3/FR-06.4). Поля
+    # baseline_status/followup_status уже синхронизированы к этому моменту — единственное место,
+    # где они меняются, это submit_answer → _sync_stage_progress, который всегда вызывается перед
+    # следующим session_state().
+    stage_status = None
+    if stage == ParticipantToken.STAGE_BASELINE:
+        stage_status = token.baseline_status
+    elif stage == ParticipantToken.STAGE_FOLLOWUP:
+        stage_status = token.followup_status
+
     answered_count = sum(1 for item in question_payload if item["answer"] is not None)
     return {
         "token": token.token,
         "consent_status": consent,
         "stage": stage,
+        "stage_status": stage_status,
         "questions": question_payload,
         "progress": {"answered": answered_count, "total": len(questions)},
     }

@@ -11,10 +11,26 @@ export async function enterViaCorporateLink(page: Page, entryCode: string = DEMO
   await expect(page.getByRole("heading", { name: "Добро пожаловать" })).toBeVisible();
 }
 
+/**
+ * Тест не начинается сразу после согласия/после завершения этапа — показывается стартовый экран
+ * этапа (StageIntroScreen.tsx) с кнопкой «Начать…». Если его нет (уже отвеченный вопрос, отчёт) —
+ * не блокируем тест ожиданием: кнопка просто не появится.
+ */
+export async function dismissStageIntro(page: Page) {
+  const startButton = page.getByRole("button", { name: /^Начать (тестирование|итоговое тестирование)$/ });
+  try {
+    await startButton.waitFor({ state: "visible", timeout: 1000 });
+  } catch {
+    return;
+  }
+  await startButton.click();
+}
+
 export async function acceptConsent(page: Page) {
   await page.getByRole("button", { name: "Начать знакомство" }).click();
   await page.getByLabel("Я согласен(на) на обработку персональных данных в рамках тестирования").check();
   await page.getByRole("button", { name: "Продолжить" }).click();
+  await dismissStageIntro(page);
   await expect(page.locator(".progress-track")).toBeVisible();
 }
 
@@ -78,6 +94,7 @@ export async function answerCurrentQuestion(page: Page, pick: "min" | "max" = "m
  * независимо от того, как именно реверсивны конкретные пункты HADS/СШХ.
  */
 export async function completeStage(page: Page, pick: "min" | "max" = "min") {
+  await dismissStageIntro(page); // предыдущий этап мог завершиться стартовым экраном следующего
   const total = await readTotalQuestions(page);
   for (let i = 0; i < total; i += 1) {
     await answerCurrentQuestion(page, pick);

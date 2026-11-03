@@ -141,6 +141,26 @@ def test_new_token_starts_on_baseline_stage(client, organization, questionnaire)
     state = client.get(f"/api/participant/sessions/{token.token}/").data
     assert state["stage"] == "baseline"
     assert state["progress"] == {"answered": 0, "total": len(questionnaire)}
+    # Ни одного ответа ещё нет — фронтенд должен показать стартовый экран этапа, а не вопросы
+    # (StageIntroScreen.tsx), поэтому стадия помечена как "not_started".
+    assert state["stage_status"] == "not_started"
+
+
+@pytest.mark.django_db
+def test_stage_status_switches_to_in_progress_after_the_first_answer(client, organization, questionnaire):
+    token = services.create_session(organization.entry_code)
+    _grant_consent(client, token)
+
+    client.post(
+        f"/api/participant/sessions/{token.token}/answers/",
+        {"question_id": questionnaire[0].id, "option_id": questionnaire[0].options.first().id},
+        format="json",
+    )
+    state = client.get(f"/api/participant/sessions/{token.token}/").data
+    # Этап уже начат — перезагрузка должна вернуть прямо к вопросу (ТЗ FR-06.3/FR-06.4), а не на
+    # стартовый экран заново.
+    assert state["stage"] == "baseline"
+    assert state["stage_status"] == "in_progress"
 
 
 @pytest.mark.django_db
@@ -160,6 +180,8 @@ def test_completing_baseline_switches_to_followup_automatically(client, organiza
     state = client.get(f"/api/participant/sessions/{token.token}/").data
     assert state["stage"] == "followup"
     assert state["progress"] == {"answered": 0, "total": len(questionnaire)}
+    # Входной этап завершён, итоговый ещё не начат — снова стартовый экран, теперь перед followup.
+    assert state["stage_status"] == "not_started"
 
 
 @pytest.mark.django_db

@@ -8,6 +8,7 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import { QuestionFlow } from "./components/QuestionFlow";
 import { ReportScreen } from "./components/ReportScreen";
 import { Shell } from "./components/Shell";
+import { StageIntroScreen } from "./components/StageIntroScreen";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { clearStoredToken, loadStoredToken, storeToken } from "./storage";
 import type { SessionState } from "./types";
@@ -19,14 +20,19 @@ type ViewState =
   | { kind: "welcome"; session: SessionState }
   | { kind: "consent"; session: SessionState }
   | { kind: "declined" }
+  | { kind: "stage_intro"; session: SessionState }
   | { kind: "questions"; session: SessionState }
   | { kind: "report"; token: string };
 
-/** ТЗ FR-04: система сама решает, какой экран показать — по состоянию сессии, без ручного выбора. */
+/** ТЗ FR-04: система сама решает, какой экран показать — по состоянию сессии, без ручного выбора.
+ *  Этап, который ещё не начат (ни одного ответа), сначала показывает стартовый экран — тест не
+ *  запускается автоматически; уже начатый этап (есть хоть один ответ) при перезагрузке страницы
+ *  возвращает прямо к вопросам (ТЗ FR-06.3/FR-06.4), а не на стартовый экран заново. */
 function screenFromSession(session: SessionState): ViewState {
   if (session.consent_status === "declined") return { kind: "declined" };
   if (session.consent_status === "required") return { kind: "welcome", session };
   if (session.stage === null) return { kind: "report", token: session.token };
+  if (session.stage_status === "not_started") return { kind: "stage_intro", session };
   return { kind: "questions", session };
 }
 
@@ -101,6 +107,11 @@ export function App() {
       break;
     case "declined":
       content = <DeclinedScreen />;
+      break;
+    case "stage_intro":
+      content = (
+        <StageIntroScreen session={view.session} onStart={() => setView({ kind: "questions", session: view.session })} />
+      );
       break;
     case "questions":
       content = (

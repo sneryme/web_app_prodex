@@ -1,5 +1,6 @@
 export type ConsentStatus = "required" | "granted" | "declined";
 export type Stage = "baseline" | "followup" | null;
+export type StageStatus = "not_started" | "in_progress" | "completed" | null;
 
 export interface AnswerOptionDTO {
   id: number;
@@ -20,6 +21,7 @@ export interface SessionState {
   token: string;
   consent_status: ConsentStatus;
   stage: Stage;
+  stage_status: StageStatus;
   questions: QuestionDTO[];
   progress: { answered: number; total: number };
 }

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { submitAnswer } from "../api";
 import type { SessionState } from "../types";
-import { TokenBadge } from "./TokenBadge";
 
 interface Props {
   session: SessionState;
@@ -31,12 +30,14 @@ export function QuestionFlow({ session, onAdvance }: Props) {
     pending && pending.questionId === question.id ? pending.optionId : question.answer?.option_id ?? null;
   const canGoNext = index < total - 1 && question.answer !== null;
   const isNumeric = question.options.length === 0;
-  const [vasValue, setVasValue] = useState(() => Number(question.answer?.raw_value ?? 50));
+  // По умолчанию 0, а не середина шкалы — середина выглядела как уже осознанно выбранный ответ,
+  // из-за чего участники пропускали вопрос, не подвинув ползунок (см. подсказку под ним).
+  const [vasValue, setVasValue] = useState(() => Number(question.answer?.raw_value ?? 0));
 
   // Компонент не размонтируется между вопросами одного этапа (только между этапами, см. App.tsx),
   // поэтому при переходе к другому числовому вопросу ползунок нужно синхронизировать явно.
   useEffect(() => {
-    if (isNumeric) setVasValue(Number(question.answer?.raw_value ?? 50));
+    if (isNumeric) setVasValue(Number(question.answer?.raw_value ?? 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question.id]);
 
@@ -105,6 +106,7 @@ export function QuestionFlow({ session, onAdvance }: Props) {
       )}
       {isNumeric ? (
         <div className="vas-input">
+          <p className="hint">Передвиньте ползунок, чтобы указать значение от 0 до 100</p>
           <input
             type="range"
             min={0}
@@ -143,7 +145,6 @@ export function QuestionFlow({ session, onAdvance }: Props) {
           Далее
         </button>
       </div>
-      <TokenBadge token={session.token} />
     </section>
   );
 }

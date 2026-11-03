@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { DEMO_ENTRY_CODE, enterViaCorporateLink } from "./support/participant";
+import { DEMO_ENTRY_CODE, dismissStageIntro, enterViaCorporateLink } from "./support/participant";
 
 const API_URL = process.env.E2E_API_URL ?? "http://localhost:8000/api";
 
@@ -48,8 +48,11 @@ test.describe("FR-03 Экран согласий и журнал согласи�
     const body = await consentResponse.json();
     expect(body.consent_status).toBe("granted");
     // Версия текста и точное время фиксируются на бэкенде в ConsentRecord (см. backend/apps/participants/test_flow.py);
-    // здесь проверяем наблюдаемое следствие — согласие переживает перезагрузку и участник сразу попадает к вопросам.
+    // здесь проверяем наблюдаемое следствие — согласие переживает перезагрузку. Тест ещё не начат
+    // (ни одного ответа), поэтому участник попадает на стартовый экран этапа, а не прямо к вопросам
+    // (см. StageIntroScreen.tsx) — дожимаем его тем же способом, что и обычный вход.
     await page.reload();
+    await dismissStageIntro(page);
     await expect(page.locator(".progress-track")).toBeVisible();
   });
 
