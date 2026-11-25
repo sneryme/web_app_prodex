@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { submitAnswer } from "../api";
+import { ApiError, submitAnswer } from "../api";
 import type { SessionState } from "../types";
 
 interface Props {
@@ -46,12 +46,14 @@ export function QuestionFlow({ session, questionnaireCode, onAdvance, onBackToMe
   }, [question.id]);
 
   async function selectOption(optionId: number) {
+    const stage = session.stage;
+    if (!stage) return;
     const wasUnanswered = question.answer === null;
     setPending({ questionId: question.id, optionId });
     setSaving(true);
     setError(null);
     try {
-      const updated = await submitAnswer(session.token, { bundle_id: session.bundle_id ?? 0, question_id: question.id, option_id: optionId });
+      const updated = await submitAnswer(session.token, { bundle_id: session.bundle_id ?? 0, stage, question_id: question.id, option_id: optionId });
       setSaving(false);
       setPending(null);
       const isQuestionnaireComplete = updated.questions.filter((item) => item.questionnaire_code === questionnaireCode).every((item) => item.answer !== null);
@@ -61,19 +63,21 @@ export function QuestionFlow({ session, questionnaireCode, onAdvance, onBackToMe
       if (wasUnanswered && index < total - 1) {
         setIndex((current) => current + 1);
       }
-    } catch {
+    } catch (error) {
       // ТЗ FR-06.7: при потере сети ответ не теряется — карточка остаётся выбранной, доступен повтор.
       setSaving(false);
-      setError("Не удалось сохранить ответ. Проверьте соединение и повторите попытку.");
+      setError(error instanceof ApiError ? error.message : "Не удалось сохранить ответ. Проверьте соединение и повторите попытку.");
     }
   }
 
   async function submitVas() {
+    const stage = session.stage;
+    if (!stage) return;
     const wasUnanswered = question.answer === null;
     setSaving(true);
     setError(null);
     try {
-      const updated = await submitAnswer(session.token, { bundle_id: session.bundle_id ?? 0, question_id: question.id, raw_value: String(vasValue) });
+      const updated = await submitAnswer(session.token, { bundle_id: session.bundle_id ?? 0, stage, question_id: question.id, raw_value: String(vasValue) });
       setSaving(false);
       const isQuestionnaireComplete = updated.questions.filter((item) => item.questionnaire_code === questionnaireCode).every((item) => item.answer !== null);
       if (updated.stage !== session.stage || isQuestionnaireComplete) onQuestionnaireComplete(updated);
@@ -81,9 +85,9 @@ export function QuestionFlow({ session, questionnaireCode, onAdvance, onBackToMe
       if (wasUnanswered && index < total - 1) {
         setIndex((current) => current + 1);
       }
-    } catch {
+    } catch (error) {
       setSaving(false);
-      setError("Не удалось сохранить ответ. Проверьте соединение и повторите попытку.");
+      setError(error instanceof ApiError ? error.message : "Не удалось сохранить ответ. Проверьте соединение и повторите попытку.");
     }
   }
 
@@ -110,6 +114,13 @@ export function QuestionFlow({ session, questionnaireCode, onAdvance, onBackToMe
         />
       </div>
       <h2>{question.text}</h2>
+      {session.is_test && <p className="hint">Тестовый участник · результаты не входят в групповую статистику.</p>}
+      {session.methodology === "iipb-0.1" && <p className="hint">{
+        questionnaireCode === "hads" ? "Оцените самочувствие за последнюю неделю." :
+        question.indicator_code === "situational_anxiety" ? "Отвечайте о том, как вы чувствуете себя в данный момент." :
+        question.indicator_code === "trait_anxiety" ? "Отвечайте о том, как вы чувствуете себя обычно." :
+        "Оцените состояние своего здоровья сегодня."
+      }</p>}
       {error && (
         <p className="error-banner">
           {error}{" "}

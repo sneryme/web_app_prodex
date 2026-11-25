@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 # 5 отчётных показателей персонального отчёта (ТЗ FR-08.1). Остальные измерения EQ-5D
 # (например eq5d_mobility) в это множество не входят — они образуют отдельный «профиль
-# здоровья», а не одну из пяти карточек (ТЗ FR-08.5), и не объединяются в общий индекс
-# (PROJECT_RULES.md №2).
+# здоровья», а не одну из пяти карточек (ТЗ FR-08.5). ИИПБ рассчитывается отдельно
+# только для комплекта с явно указанной версией методологии.
 REPORT_INDICATORS = [
     "eq5d_vas",
     "situational_anxiety",
@@ -161,9 +161,14 @@ def compute_scores_for_stage(token, stage, bundle=None) -> list[ScoringResult]:
             indicator_code=indicator_code,
             defaults={
                 "raw_score": Decimal(raw_score),
-                "interpretation_zone": zone_for(indicator_code, raw_score),
+                "interpretation_zone": (
+                    "" if bundle and bundle.methodology == "iipb-0.1" and indicator_code.startswith("eq5d_")
+                    else zone_for(indicator_code, raw_score)
+                ),
                 "questionnaire_version_id": next(iter(version_ids)),
             },
         )
         results.append(result)
+    from .iipb_services import save_iipb_result
+    save_iipb_result(token, stage, bundle)
     return results

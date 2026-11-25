@@ -14,8 +14,8 @@ class ConsentRecordInline(admin.TabularInline):
 class ParticipantTokenAdmin(admin.ModelAdmin):
     # Токен виден только внутри админки для инженерной поддержки: работодатель и PRODEX по умолчанию
     # доступа к этому экрану не имеют — доступ разграничивается на уровне RBAC (ТЗ п.3, FR-12).
-    list_display = ["token", "organization", "stream", "status", "baseline_status", "followup_status", "created_at"]
-    list_filter = ["status", "baseline_status", "followup_status", "organization", "stream"]
+    list_display = ["token", "organization", "stream", "is_test", "status", "baseline_status", "followup_status", "created_at"]
+    list_filter = ["is_test", "status", "baseline_status", "followup_status", "organization", "stream"]
     search_fields = ["token"]
-    readonly_fields = ["report_payload", "report_generated_at"]
+    readonly_fields = ["is_test", "report_payload", "report_generated_at"]
     inlines = [ConsentRecordInline]

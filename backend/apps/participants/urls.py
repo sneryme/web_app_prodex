@@ -3,6 +3,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("entry/", views.participant_entry),
     path("streams/", views.list_entry_streams),
     path("sessions/", views.create_session),
     path("sessions/<str:token>/", views.session_detail),

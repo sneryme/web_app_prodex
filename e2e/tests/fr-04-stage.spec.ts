@@ -6,12 +6,22 @@ const API_URL = process.env.E2E_API_URL ?? "http://localhost:8000/api";
 test.describe("FR-04 Автоматическое определение этапа", () => {
   test("FR-04.1 новый токен попадает на входное тестирование", async ({ page }) => {
     await startTesting(page);
-    await expect(page.getByText("Входное тестирование", { exact: false })).toBeVisible();
+    await expect(page.locator('[data-stage="baseline"][data-question-count]')).toBeVisible();
   });
 
-  test("FR-04.2 токен с завершённым входным попадает на итоговое тестирование", async ({ page }) => {
+  test("FR-04.2 после входного этапа можно скопировать код и перейти к итоговому", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await startTesting(page);
+    const token = (await context.cookies()).find((cookie) => cookie.name === "pez_participant_token")?.value;
+    if (!token) throw new Error("Код участника не сохранён в сессии.");
+
     await completeStage(page);
+    await expect(page.getByText(/сохраните его.*для повторного входа/i)).toBeVisible();
+    await expect(page.getByText(token, { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Скопировать", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(token);
+
+    await page.getByRole("button", { name: "Перейти к итоговым тестам" }).click();
     await expect(page.getByText("Итоговое тестирование", { exact: false })).toBeVisible();
   });
 
@@ -39,10 +49,10 @@ test.describe("FR-04 Автоматическое определение эта�
   test("FR-04.5 итоговое нельзя начать до завершения входного (прямые вызовы API)", async ({ request }) => {
     const created = await request.post(`${API_URL}/participant/sessions/`, { data: { entry_code: DEMO_ENTRY_CODE } });
     const { token } = await created.json();
-    await request.post(`${API_URL}/participant/sessions/${token}/consents/`, {
+    const consent = await request.post(`${API_URL}/participant/sessions/${token}/consents/`, {
       data: { consent_type: "data_processing", text_version: "v1", accepted: true },
     });
-    const initialState = await (await request.get(`${API_URL}/participant/sessions/${token}/`)).json();
+    const initialState = await consent.json();
     const questions = initialState.questions;
     expect(questions.length).toBeGreaterThan(1);
 
@@ -50,8 +60,8 @@ test.describe("FR-04 Автоматическое определение эта�
     // выбираем первый вариант.
     function answerPayload(question: (typeof questions)[number]) {
       return question.options.length > 0
-        ? { question_id: question.id, option_id: question.options[0].id }
-        : { question_id: question.id, raw_value: "50" };
+        ? { stage: "baseline", question_id: question.id, option_id: question.options[0].id }
+        : { stage: "baseline", question_id: question.id, raw_value: "50" };
     }
 
     // Отвечаем на все вопросы, кроме последнего, — этап должен оставаться входным всё это время.
@@ -70,5 +80,11 @@ test.describe("FR-04 Автоматическое определение эта�
     });
     const finalBody = await finalResponse.json();
     expect(finalBody.stage).toBe("followup");
+
+    const replay = await request.post(`${API_URL}/participant/sessions/${token}/answers/`, {
+      data: answerPayload(last),
+    });
+    expect(replay.status()).toBe(409);
+    expect(await replay.json()).toMatchObject({ code: "stage_mismatch" });
   });
 });

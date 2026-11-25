@@ -1,0 +1,119 @@
+{
+  "token": "preview-iipb",
+  "summary": "",
+  "improved_count": 3,
+  "total_count": 4,
+  "cards": [],
+  "eq5d_profile": [],
+  "iipb": {
+    "baseline": {
+      "version": "0.1",
+      "version_date": "2026-11-16",
+      "notice": "ИИПБ v0.1 — предварительная, не валидированная конструкция. Результат не является диагнозом и не заменяет консультацию специалиста.",
+      "inputs": {
+        "hads_anxiety": 9,
+        "hads_depression": 6,
+        "situational_anxiety": 46,
+        "trait_anxiety": 48,
+        "eq5d_mobility": 1,
+        "eq5d_self_care": 1,
+        "eq5d_daily_activities": 2,
+        "eq5d_pain": 2,
+        "eq5d_anxiety_depression": 3,
+        "eq5d_vas": 60
+      },
+      "lss": 9,
+      "subindices": {
+        "hads_anxiety": 58.333333333333336,
+        "hads_depression": 78.57142857142857,
+        "situational_anxiety": 47.22222222222222,
+        "lss": 58.333333333333336,
+        "eq5d_vas": 76.74418604651163
+      },
+      "domains": {
+        "anxiety": 52.77777777777778,
+        "depression": 78.57142857142857,
+        "health": 67.53875968992249
+      },
+      "unrounded_index": 66.29598867970961,
+      "index": 66,
+      "level": "II",
+      "level_label": "Лёгкое снижение",
+      "conclusion": "Лёгкое снижение",
+      "action": "Курс; повторная оценка после курса.",
+      "red_flags": [],
+      "yellow_flags": [
+        {
+          "code": "Y1",
+          "label": "Высокая ситуативная тревожность",
+          "action": "Повторите оценку через 1–2 недели. Если признак сохраняется, обратитесь к специалисту."
+        }
+      ],
+      "trait_marker": {
+        "raw_score": 48,
+        "label": "высокая"
+      },
+      "measured_at": "2026-11-16T09:00:00+03:00"
+    },
+    "followup": {
+      "version": "0.1",
+      "version_date": "2026-11-16",
+      "notice": "ИИПБ v0.1 — предварительная, не валидированная конструкция. Результат не является диагнозом и не заменяет консультацию специалиста.",
+      "inputs": {
+        "hads_anxiety": 6,
+        "hads_depression": 4,
+        "situational_anxiety": 35,
+        "trait_anxiety": 47,
+        "eq5d_mobility": 1,
+        "eq5d_self_care": 1,
+        "eq5d_daily_activities": 1,
+        "eq5d_pain": 2,
+        "eq5d_anxiety_depression": 4,
+        "eq5d_vas": 75
+      },
+      "lss": 9,
+      "subindices": {
+        "hads_anxiety": 78.57142857142857,
+        "hads_depression": 85.71428571428571,
+        "situational_anxiety": 66.07142857142857,
+        "lss": 58.333333333333336,
+        "eq5d_vas": 85.46511627906976
+      },
+      "domains": {
+        "anxiety": 72.32142857142857,
+        "depression": 85.71428571428571,
+        "health": 71.89922480620154
+      },
+      "unrounded_index": 76.64497969730527,
+      "index": 77,
+      "level": "I",
+      "level_label": "Сохранное благополучие",
+      "conclusion": "Требуется консультация специалиста",
+      "action": "Обратитесь к врачу-психотерапевту, врачу-психиатру или медицинскому психологу.",
+      "red_flags": [
+        {
+          "code": "R3",
+          "label": "Выраженные трудности в измерении EQ-5D «Тревога / депрессия»",
+          "action": "Обратитесь к врачу-психотерапевту, врачу-психиатру или медицинскому психологу."
+        }
+      ],
+      "yellow_flags": [],
+      "trait_marker": {
+        "raw_score": 47,
+        "label": "высокая"
+      },
+      "measured_at": "2026-11-24T09:00:00+03:00"
+    },
+    "dynamics": {
+      "delta_pp": 11,
+      "delta_percent": 16.7,
+      "level_change": "II → I",
+      "trend": "improved",
+      "summary": "Улучшение: +11 п.п. (+16.7%). Порог достоверного изменения ИИПБ не установлен. Без контрольной группы изменение нельзя приписать терапии.",
+      "notice": "Порог достоверного изменения ИИПБ не установлен. Без контрольной группы изменение нельзя приписать терапии.",
+      "actions": [
+        "Обратитесь к врачу-психотерапевту, врачу-психиатру или медицинскому психологу."
+      ]
+    }
+  }
+}

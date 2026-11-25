@@ -11,7 +11,7 @@ class Command(BaseCommand):
             entry_code="demo-entry-code", defaults={"name": "Демо-организация PRODEX"}
         )
         stream, _ = Stream.objects.get_or_create(
-            organization=organization, code="demo-stream", defaults={"status": Stream.STATUS_ACTIVE}
+            organization=organization, code="demo-stream", defaults={"name": "demo-stream", "status": Stream.STATUS_ACTIVE}
         )
         if stream.status != Stream.STATUS_ACTIVE:
             stream.status = Stream.STATUS_ACTIVE

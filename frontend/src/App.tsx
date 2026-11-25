@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { ApiError, createSession, getAvailableStreams, getSession, selectBundle } from "./api";
+import { ApiError, createSession, getEntryContext, getSession, selectBundle } from "./api";
 import { ConsentScreen } from "./components/ConsentScreen";
 import { DeclinedScreen } from "./components/DeclinedScreen";
 import { EntryErrorScreen } from "./components/EntryErrorScreen";
+import { FollowupNoticeScreen } from "./components/FollowupNoticeScreen";
 import { LandingScreen } from "./components/LandingScreen";
 import { LoadingScreen } from "./components/LoadingScreen";
 import { QuestionFlow } from "./components/QuestionFlow";
@@ -11,18 +12,28 @@ import { Shell } from "./components/Shell";
 import { StreamSelectionScreen } from "./components/StreamSelectionScreen";
 import { BundleSelectionScreen } from "./components/BundleSelectionScreen";
 import { TestMenuScreen } from "./components/TestMenuScreen";
+import { TokenNoticeScreen } from "./components/TokenNoticeScreen";
 import { WelcomeScreen } from "./components/WelcomeScreen";
-import { clearStoredToken, loadStoredToken, storeToken } from "./storage";
+import {
+  clearStoredToken,
+  clearTokenNoticePending,
+  isTokenNoticePending,
+  loadStoredToken,
+  markTokenNoticePending,
+  storeToken,
+} from "./storage";
 import type { ParticipantHomeState, ParticipantStream, SessionState } from "./types";
 
 type ViewState =
   | { kind: "landing" }
   | { kind: "loading" }
   | { kind: "stream_select"; entryCode: string; streams: ParticipantStream[] }
+  | { kind: "token_notice"; home: ParticipantHomeState }
   | { kind: "bundle_select"; home: ParticipantHomeState }
   | { kind: "entry_error"; message: string }
   | { kind: "welcome"; session: SessionState }
   | { kind: "consent"; session: SessionState }
+  | { kind: "followup_notice"; session: SessionState }
   | { kind: "declined" }
   | { kind: "test_menu"; session: SessionState }
   | { kind: "questions"; session: SessionState; questionnaireCode: string }
@@ -36,6 +47,9 @@ function screenFromSession(session: SessionState): ViewState {
   if (session.consent_status === "declined") return { kind: "declined" };
   if (session.consent_status === "required") return { kind: "welcome", session };
   if (session.stage === null) return { kind: "report", token: session.token, bundleId: session.bundle_id ?? 0 };
+  if (session.stage === "followup" && (session.followup_locked || session.stage_status === "not_started")) {
+    return { kind: "followup_notice", session };
+  }
   if (session.stage_status === "not_started") return { kind: "test_menu", session };
   const firstUnanswered = session.questions.find((question) => question.answer === null);
   return { kind: "questions", session, questionnaireCode: firstUnanswered?.questionnaire_code ?? session.questionnaires[0]?.code ?? "" };
@@ -55,6 +69,7 @@ export function App() {
 
     async function bootstrap() {
       if (participantToken) {
+        clearTokenNoticePending();
         setView({ kind: "loading" });
         try {
           const session = await getSession(participantToken);
@@ -72,32 +87,48 @@ export function App() {
         return;
       }
 
-      // FR-01.3: сохранённый токен продолжает прежнюю сессию — приоритет перед новым кодом в URL.
+      // У ссылки организации приоритет над сохранённой сессией другой организации. Если токен
+      // относится к этой же организации, продолжаем его как раньше.
+      if (code) {
+        setView({ kind: "loading" });
+        try {
+          const entry = await getEntryContext(code);
+          if (cancelled) return;
+          if (storedToken) {
+            try {
+              const session = await getSession(storedToken);
+              if (cancelled) return;
+              if (session.organization_id === entry.organization_id) {
+                setView(
+                  isTokenNoticePending() ? { kind: "token_notice", home: session } : { kind: "bundle_select", home: session },
+                );
+                return;
+              }
+            } catch {
+              if (!cancelled) clearStoredToken();
+            }
+          }
+          if (!cancelled) setView({ kind: "stream_select", entryCode: code, streams: entry.streams });
+        } catch (error) {
+          if (cancelled) return;
+          const message = error instanceof ApiError ? error.message : "Не удалось создать сессию. Попробуйте ещё раз.";
+          setView({ kind: "entry_error", message });
+        }
+        return;
+      }
+
+      // Без новой корпоративной ссылки продолжаем сохранённую сессию участника.
       if (storedToken) {
         setView({ kind: "loading" });
         try {
           const session = await getSession(storedToken);
-          if (!cancelled) setView({ kind: "bundle_select", home: session });
+          if (!cancelled) {
+            setView(isTokenNoticePending() ? { kind: "token_notice", home: session } : { kind: "bundle_select", home: session });
+          }
           return;
         } catch {
           if (!cancelled) clearStoredToken();
         }
-      }
-      if (code) {
-        setView({ kind: "loading" });
-        try {
-          const streams = await getAvailableStreams(code);
-          // Отменённый (замененный вторым запуском эффекта) инстанс не должен перезаписывать
-          // localStorage/URL уже после того, как активный инстанс сохранил свою сессию.
-          if (cancelled) return;
-          setView({ kind: "stream_select", entryCode: code, streams });
-        } catch (error) {
-          if (cancelled) return;
-          const message =
-            error instanceof ApiError ? error.message : "Не удалось создать сессию. Попробуйте ещё раз.";
-          setView({ kind: "entry_error", message });
-        }
-        return;
       }
       if (!cancelled) setView({ kind: "landing" });
     }
@@ -113,8 +144,9 @@ export function App() {
     try {
       const home = await createSession(entryCode, streamId);
       storeToken(home.token);
+      markTokenNoticePending();
       window.history.replaceState({}, "", window.location.pathname);
-      setView({ kind: "bundle_select", home });
+      setView({ kind: "token_notice", home });
     } catch (error) {
       const message = error instanceof ApiError ? error.message : "Could not create a session. Please try again.";
       setView({ kind: "entry_error", message });
@@ -123,8 +155,14 @@ export function App() {
 
   async function resumeSession(token: string) {
     const home = await getSession(token);
+    clearTokenNoticePending();
     storeToken(home.token);
     window.history.replaceState({}, "", window.location.pathname);
+    setView({ kind: "bundle_select", home });
+  }
+
+  function continueFromTokenNotice(home: ParticipantHomeState) {
+    clearTokenNoticePending();
     setView({ kind: "bundle_select", home });
   }
 
@@ -161,6 +199,9 @@ export function App() {
         />
       );
       break;
+    case "token_notice":
+      content = <TokenNoticeScreen home={view.home} onContinue={() => continueFromTokenNotice(view.home)} />;
+      break;
     case "bundle_select":
       content = view.home.consent_status === "declined" ? (
         <DeclinedScreen />
@@ -178,6 +219,15 @@ export function App() {
       break;
     case "consent":
       content = <ConsentScreen session={view.session} onResult={(updated) => setView(screenFromSession(updated))} />;
+      break;
+    case "followup_notice":
+      content = (
+        <FollowupNoticeScreen
+          session={view.session}
+          onContinue={() => setView({ kind: "test_menu", session: view.session })}
+          onBackToBundles={() => void returnToBundleMenu(view.session.token)}
+        />
+      );
       break;
     case "declined":
       content = <DeclinedScreen />;

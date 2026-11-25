@@ -29,14 +29,14 @@ def test_report_is_not_ready_until_both_stages_are_fully_scored(token):
 
 
 @pytest.mark.django_db
-def test_report_is_not_ready_if_even_one_indicator_is_missing(token):
+def test_legacy_report_contains_only_indicators_present_in_both_stages(token):
     for code in REPORT_INDICATORS:
         _score(token, "baseline", code, 2)
         _score(token, "followup", code, 2)
     ScoringResult.objects.filter(token=token, stage="followup", indicator_code=REPORT_INDICATORS[0]).delete()
 
-    with pytest.raises(ReportNotReady):
-        build_personal_report(token)
+    report = build_personal_report(token)
+    assert {card["indicator_code"] for card in report["cards"]} == set(REPORT_INDICATORS[1:])
 
 
 @pytest.mark.django_db

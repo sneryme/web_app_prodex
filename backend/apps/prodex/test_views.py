@@ -130,3 +130,34 @@ def test_operations_counts_are_not_affected_by_scored_answers(org_a):
     response = client.get("/api/prodex/operations/")
 
     assert response.data["errors"]["unscored_answer_groups"] == 0
+
+
+@pytest.mark.django_db
+def test_demo_organizations_and_individual_test_participants_are_excluded(org_a):
+    demo_org = Organization.objects.create(name="Демо ИИПБ", is_demo=True)
+    Stream.objects.create(organization=demo_org, name="Демо")
+    today = timezone.localdate()
+    License.objects.create(organization=demo_org, starts_at=today, ends_at=today)
+    ParticipantToken.objects.create(organization=org_a)
+    for organization, is_test in ((org_a, True), (demo_org, False)):
+        token = ParticipantToken.objects.create(
+            organization=organization, is_test=is_test,
+            baseline_status=ParticipantToken.PROGRESS_COMPLETED,
+            followup_status=ParticipantToken.PROGRESS_COMPLETED,
+        )
+        version = QuestionnaireVersion.objects.create(code="hads", version_label=f"test-{token.pk}")
+        question = Question.objects.create(questionnaire_version=version, order=1, code="q", indicator_code="hads_anxiety")
+        AnswerResponse.objects.create(token=token, stage="baseline", question=question)
+
+    client = _staff_client(StaffProfile.ROLE_PRODEX_ADMIN)
+    rows = client.get("/api/prodex/clients/").data
+    assert [(row["id"], row["participants_count"]) for row in rows] == [(org_a.pk, 1)]
+    assert client.get("/api/prodex/licenses/").data == []
+    operations = client.get("/api/prodex/operations/").data
+    assert operations["organizations_count"] == 1
+    assert operations["participants"]["total"] == 1
+    assert operations["participants"]["active"] == 1
+    assert operations["completion"] == {"baseline_completed": 0, "followup_completed": 0}
+    assert operations["activity"]["new_participants_last_30d"] == 1
+    assert operations["errors"]["unscored_answer_groups"] == 0
+    assert sum(operations["streams"].values()) == 0

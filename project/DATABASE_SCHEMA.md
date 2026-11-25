@@ -4,7 +4,11 @@
 словами и диаграммой, чтобы не читать весь код ради общей картины; при расхождении модели важнее
 этого файла.
 
-16 собственных таблиц (не считая `auth.User`, `authtoken.Token`, `django_admin_log` — это
+`ParticipantToken.is_test` (миграция `participants.0004`) отмечает тестовые прохождения:
+итоговый этап доступен без семидневного ожидания, данные исключены из групповой аналитики.
+Флаг по умолчанию false и недоступен для установки через API участника.
+
+17 собственных таблиц (не считая `auth.User`, `authtoken.Token`, `django_admin_log` — это
 Django/DRF, не наши):
 
 | Приложение | Таблицы |
@@ -12,10 +16,15 @@ Django/DRF, не наши):
 | `organizations` | Organization, License, Stream |
 | `identity` | StaffProfile, AuditEvent |
 | `participants` | ParticipantToken, ConsentRecord |
-| `assessments` | QuestionnaireVersion, TestBundle, TestBundleItem, Question, AnswerOption, AnswerResponse, ScoringResult |
+| `assessments` | QuestionnaireVersion, TestBundle, TestBundleItem, Question, AnswerOption, AnswerResponse, ScoringResult, IIPBResult |
 | `reporting` | AggregateSnapshot, ExportArtifact |
 
 ## Диаграмма
+
+`TestBundle.methodology` фиксирует формулу; `IIPBResult` хранит первый полный замер
+по `(token,bundle,stage,version)` с датой версии, временем замера и JSON расчёта/исходных значений.
+В `Organization` добавлены `specialist_contact` и `physician_contact`, доступные участнику
+для маршрутизации. Миграции: `assessments.0007`, `organizations.0006`.
 
 ```mermaid
 erDiagram

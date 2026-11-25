@@ -44,11 +44,12 @@ class AggregateSnapshot(models.Model):
 
 
 class ExportArtifact(models.Model):
-    """Сформированный PDF/XLSX-экспорт; строки участников и токены в файл не попадают (ТЗ FR-10.1/10.2)."""
+    """Сформированный PDF/XLSX/CSV-экспорт; строки участников и токены в файл не попадают (ТЗ FR-10.1/10.2)."""
 
     KIND_PDF = "pdf"
     KIND_XLSX = "xlsx"
-    KIND_CHOICES = [(KIND_PDF, "PDF"), (KIND_XLSX, "XLSX")]
+    KIND_CSV = "csv"
+    KIND_CHOICES = [(KIND_PDF, "PDF"), (KIND_XLSX, "XLSX"), (KIND_CSV, "CSV")]
 
     organization = models.ForeignKey(
         "organizations.Organization", on_delete=models.CASCADE, related_name="export_artifacts", verbose_name="Организация"

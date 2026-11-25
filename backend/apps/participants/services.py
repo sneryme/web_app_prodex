@@ -6,10 +6,14 @@
 from __future__ import annotations
 
 from typing import Optional
+from datetime import timedelta
 
+from django.db import transaction
 from django.utils import timezone
 
-from apps.assessments.models import AnswerResponse, Question, QuestionnaireVersion, TestBundle
+from apps.assessments.models import AnswerResponse, IIPBResult, Question, QuestionnaireVersion, TestBundle
+from apps.assessments.iipb import VERSION
+from apps.assessments.iipb_services import is_iipb, result_payload
 from apps.assessments.scoring import compute_scores_for_stage
 from apps.organizations.models import Organization, Stream
 
@@ -40,6 +44,22 @@ class NoActiveStage(Exception):
     """Оба этапа завершены, либо активные методики ещё не подключены методологом."""
 
 
+class StageMismatch(Exception):
+    """Ответ отправлен для этапа, который сейчас не активен."""
+
+
+class QuestionnaireComplete(Exception):
+    """Answers in a completed questionnaire are locked for the current stage."""
+
+
+class FollowupTooEarly(Exception):
+    """HADS требует интервала не менее семи дней между замерами ИИПБ."""
+
+
+class QuestionnaireOrderRequired(Exception):
+    """В ИИПБ опросники проходят последовательно: HADS, СТ/ЛТ, EQ-5D-5L."""
+
+
 class UnknownQuestion(Exception):
     """question_id/option_id не относятся к активному набору вопросов текущего этапа."""
 
@@ -50,12 +70,12 @@ class InvalidAnswerValue(Exception):
 
 def active_questions(bundle: TestBundle | None = None) -> list[Question]:
     if bundle is None:
-        bundle = TestBundle.objects.filter(is_active=True).order_by("id").first()
+        bundle = TestBundle.objects.filter(is_active=True).order_by("-methodology", "id").first()
     if bundle is not None:
         versions = [
             item.questionnaire_version
             for item in bundle.items.select_related("questionnaire_version").all()
-            if item.questionnaire_version.is_active
+            if item.questionnaire_version.is_active or not bundle.is_active or is_iipb(bundle)
         ]
     else:
         versions = list(QuestionnaireVersion.objects.filter(is_active=True).order_by("code"))
@@ -65,12 +85,17 @@ def active_questions(bundle: TestBundle | None = None) -> list[Question]:
         questions.extend(version.questions.prefetch_related("options").order_by("order"))
     return questions
 
-def active_streams_for_entry_code(entry_code: str) -> list[Stream]:
+def entry_context_for_code(entry_code: str) -> tuple[Organization, list[Stream]]:
     try:
         organization = Organization.objects.get(entry_code=entry_code)
     except Organization.DoesNotExist as exc:
         raise EntryCodeInvalid from exc
-    return list(Stream.objects.filter(organization=organization, status=Stream.STATUS_ACTIVE).order_by("name", "code"))
+    streams = list(Stream.objects.filter(organization=organization, status=Stream.STATUS_ACTIVE).order_by("name", "code"))
+    return organization, streams
+
+
+def active_streams_for_entry_code(entry_code: str) -> list[Stream]:
+    return entry_context_for_code(entry_code)[1]
 
 
 def create_session(entry_code: str, stream_id: int | None = None) -> ParticipantToken:
@@ -104,7 +129,7 @@ def get_token(token_value: str) -> ParticipantToken:
         raise SessionNotFound from exc
 
 
-def consent_status(token: ParticipantToken) -> str:
+def consent_status(token: ParticipantToken, bundle: TestBundle | None = None) -> str:
     """"required" | "granted" | "declined" — считаем по последнему согласию на обработку ПД."""
     latest = (
         ConsentRecord.objects.filter(token=token, consent_type=ConsentRecord.TYPE_DATA_PROCESSING)
@@ -113,6 +138,10 @@ def consent_status(token: ParticipantToken) -> str:
     )
     if latest is None:
         return "required"
+    if latest.accepted and is_iipb(bundle):
+        notice = ConsentRecord.objects.filter(token=token, consent_type=ConsentRecord.TYPE_INFORMED_NOTICE).order_by("-accepted_at").first()
+        if latest.text_version != bundle.methodology or notice is None or not notice.accepted or notice.text_version != bundle.methodology:
+            return "required"
     return "granted" if latest.accepted else "declined"
 
 
@@ -145,13 +174,13 @@ def get_bundle_for_token(token: ParticipantToken, bundle_id: int) -> TestBundle:
         raise BundleUnavailable
     assigned = token.organization.test_bundles.filter(pk=bundle.pk).exists()
     has_progress = AnswerResponse.objects.filter(token=token, bundle=bundle).exists()
-    if not assigned and not has_progress:
+    if (not assigned or not bundle.is_active) and not has_progress:
         raise BundleUnavailable
     return bundle
 
 
 def participant_home_state(token: ParticipantToken) -> dict:
-    assigned_ids = set(token.organization.test_bundles.values_list("pk", flat=True))
+    assigned_ids = set(token.organization.test_bundles.filter(is_active=True).values_list("pk", flat=True))
     historical_ids = set(
         AnswerResponse.objects.filter(token=token, bundle__isnull=False).values_list("bundle_id", flat=True).distinct()
     )
@@ -205,6 +234,7 @@ def participant_home_state(token: ParticipantToken) -> dict:
                 "id": bundle.pk,
                 "code": bundle.code,
                 "name": bundle.name,
+                "methodology": bundle.methodology,
                 "status": status,
                 "baseline": {"answered": baseline_count, "total": total},
                 "followup": {"answered": followup_count, "total": total},
@@ -212,7 +242,13 @@ def participant_home_state(token: ParticipantToken) -> dict:
             }
         )
 
-    return {"token": token.token, "consent_status": consent_status(token), "bundles": bundle_payload}
+    return {
+        "token": token.token,
+        "organization_id": token.organization_id,
+        "is_test": token.is_test,
+        "consent_status": consent_status(token),
+        "bundles": bundle_payload,
+    }
 
 def _sync_stage_progress(token: ParticipantToken, bundle: TestBundle | None = None) -> None:
     total = len(active_questions(bundle))
@@ -243,11 +279,22 @@ def _sync_stage_progress(token: ParticipantToken, bundle: TestBundle | None = No
     if changed_fields:
         token.save(update_fields=changed_fields)
 
+def followup_available_at(token, bundle):
+    if not is_iipb(bundle):
+        return None
+    baseline = IIPBResult.objects.filter(token=token, bundle=bundle, stage="baseline", version=VERSION).first()
+    if baseline is None:
+        return None
+    return baseline.measured_at if token.is_test else baseline.measured_at + timedelta(days=7)
+
+
 def session_state(token: ParticipantToken, bundle: TestBundle | None = None) -> dict:
-    consent = consent_status(token)
+    consent = consent_status(token, bundle)
     stage = current_stage(token, bundle)
     questions = active_questions(bundle)
-    show_questions = stage is not None and consent == "granted"
+    available_at = followup_available_at(token, bundle)
+    locked = stage == "followup" and is_iipb(bundle) and (available_at is None or timezone.now() < available_at)
+    show_questions = stage is not None and consent == "granted" and not locked
 
     answers_by_question = {}
     if show_questions:
@@ -306,6 +353,12 @@ def session_state(token: ParticipantToken, bundle: TestBundle | None = None) -> 
         "token": token.token,
         "bundle_id": bundle.pk if bundle else None,
         "bundle_name": bundle.name if bundle else "",
+        "is_test": token.is_test,
+        "methodology": bundle.methodology if bundle else "",
+        "followup_locked": locked,
+        "followup_available_at": available_at.isoformat() if available_at else None,
+        "baseline_result": result_payload(IIPBResult.objects.filter(token=token, bundle=bundle, stage="baseline", version=VERSION).first()) if is_iipb(bundle) and consent == "granted" else None,
+        "routing_contacts": {"specialist": token.organization.specialist_contact, "physician": token.organization.physician_contact} if is_iipb(bundle) and consent == "granted" else {},
         "consent_status": consent,
         "stage": stage,
         "stage_status": stage_status,
@@ -317,20 +370,58 @@ def session_state(token: ParticipantToken, bundle: TestBundle | None = None) -> 
         },
     }
 
+@transaction.atomic
 def submit_answer(
-    token: ParticipantToken, question_id: int, option_id: Optional[int], raw_value: str, bundle: TestBundle | None = None
+    token: ParticipantToken,
+    question_id: int,
+    option_id: Optional[int],
+    raw_value: str,
+    bundle: TestBundle | None = None,
+    *,
+    stage: str,
 ) -> dict:
-    if consent_status(token) != "granted":
+    token = ParticipantToken.objects.select_for_update().get(pk=token.pk)
+    if bundle is None and Question.objects.filter(pk=question_id, questionnaire_version__version_label="iipb-0.1").exists():
+        raise BundleUnavailable
+    if consent_status(token, bundle) != "granted":
         raise ConsentRequired
 
-    stage = current_stage(token, bundle)
-    if stage is None:
+    active_stage = current_stage(token, bundle)
+    if active_stage is None:
         raise NoActiveStage
+    if stage != active_stage:
+        raise StageMismatch
+    if stage == "followup" and is_iipb(bundle):
+        available_at = followup_available_at(token, bundle)
+        if available_at is None or timezone.now() < available_at:
+            raise FollowupTooEarly
 
     questions_by_id = {question.id: question for question in active_questions(bundle)}
     question = questions_by_id.get(question_id)
     if question is None:
         raise UnknownQuestion
+    if is_iipb(bundle):
+        answered_ids = set(AnswerResponse.objects.filter(token=token, bundle=bundle, stage=stage).values_list("question_id", flat=True))
+        next_question = next((item for item in questions_by_id.values() if item.id not in answered_ids), None)
+        if next_question and (
+            next_question.questionnaire_version_id != question.questionnaire_version_id
+            or (question.id not in answered_ids and next_question.id != question.id)
+        ):
+            raise QuestionnaireOrderRequired
+
+    questionnaire_questions = [
+        item for item in questions_by_id.values()
+        if item.questionnaire_version_id == question.questionnaire_version_id
+    ]
+    questionnaire_answers = AnswerResponse.objects.filter(
+        token=token,
+        stage=stage,
+        question_id__in=[item.id for item in questionnaire_questions],
+    )
+    if bundle is not None:
+        questionnaire_answers = questionnaire_answers.filter(bundle=bundle)
+    if questionnaire_answers.values("question_id").distinct().count() >= len(questionnaire_questions):
+        raise QuestionnaireComplete
 
     options = question.options.all()
     selected_option = None

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { answerCurrentQuestion, completeStage, DEMO_ENTRY_CODE, startTesting } from "./support/participant";
+import { answerCurrentQuestion, completeStage, DEMO_ENTRY_CODE, readParticipantToken, startTesting } from "./support/participant";
 
 const API_URL = process.env.E2E_API_URL ?? "http://localhost:8000/api";
 
@@ -12,7 +12,7 @@ test("FR-13: bundle assignment, resume, completion lock, and isolated progress",
   });
 
   await startTesting(page, DEMO_ENTRY_CODE, "dummy-bundle");
-  const token = await page.evaluate(() => window.localStorage.getItem("pez_participant_token"));
+  const token = await readParticipantToken(page);
   expect(token).toBeTruthy();
 
   // Save a partial answer, reload the browser, and resume the same bundle.

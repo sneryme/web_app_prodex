@@ -52,6 +52,10 @@ class ParticipantToken(models.Model):
         verbose_name="Поток",
     )
     status = models.CharField("Статус", max_length=16, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    is_test = models.BooleanField(
+        "Тестовый участник", default=False,
+        help_text="Итоговый замер без ожидания 7 дней; данные исключены из групповой аналитики.",
+    )
     created_at = models.DateTimeField("Создан", auto_now_add=True)
 
     # Прогресс по этапам (бывшая таблица StageProgress) — производный кэш для будущей аналитики

@@ -1,5 +1,4 @@
 import type { SessionState } from "../types";
-import { TokenBadge } from "./TokenBadge";
 
 interface Props {
   session: SessionState;
@@ -18,7 +17,7 @@ export function WelcomeScreen({ session, onContinue }: Props) {
           <strong>Цель.</strong> Оценить ваше состояние до и после курса, чтобы вы сами увидели изменения.
         </li>
         <li>
-          <strong>Время.</strong> Прохождение занимает несколько минут — один вопрос на экран.
+          <strong>Время.</strong> {session.methodology === "iipb-0.1" ? "60 вопросов, примерно 10–15 минут. Отвечайте спокойно, без спешки." : "Прохождение занимает несколько минут — один вопрос на экран."}
         </li>
         <li>
           <strong>Конфиденциальность.</strong> У вас анонимный код участника; ФИО, телефон и e-mail не
@@ -29,10 +28,10 @@ export function WelcomeScreen({ session, onContinue }: Props) {
           результат ему не передаётся.
         </li>
       </ul>
+      {session.methodology === "iipb-0.1" && <p>ИИПБ v0.1 — предварительный показатель для наблюдения за состоянием. Он не является диагнозом. Участие добровольное, для взрослых от 18 лет; отказ не влечёт последствий. {session.is_test ? "Вы используете тестового участника: итоговый этап доступен без ожидания." : "Между замерами необходимо не менее 7 дней."}</p>}
       <button type="button" onClick={onContinue}>
         Начать знакомство
       </button>
-      <TokenBadge token={session.token} />
     </section>
   );
 }

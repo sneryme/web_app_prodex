@@ -32,6 +32,11 @@ export interface StageBlock {
   is_suppressed: boolean;
   mean?: number;
   zone_distribution?: Record<string, number>;
+  median?: number;
+  red_flag_count?: number;
+  yellow_flag_count?: number;
+  flag_distribution?: Record<string, number>;
+  trait_distribution?: Record<string, number>;
 }
 
 export interface TrendBlock {
@@ -40,6 +45,8 @@ export interface TrendBlock {
   improved?: number;
   worsened?: number;
   stable?: number;
+  mean_delta?: number;
+  median_delta?: number;
 }
 
 export interface IndicatorOverview {
@@ -57,4 +64,30 @@ export interface OrganizationOverview {
   coverage: { participants: number };
   completion: { baseline_completed: number; followup_completed: number };
   indicators: IndicatorOverview[];
+  iipb?: IIPBOverview | null;
+}
+
+export interface IIPBOverview {
+  version: string;
+  version_date: string;
+  threshold: number;
+  notice: string;
+  dynamics_notice: string;
+  baseline: StageBlock;
+  followup: StageBlock;
+  trend: TrendBlock;
+}
+
+export interface ComparisonGroup {
+  key: string;
+  label: string;
+  threshold: number;
+  date_from?: string;
+  date_to?: string;
+  overview: OrganizationOverview;
+}
+
+export interface ComparisonResult {
+  mode: "streams" | "periods";
+  groups: ComparisonGroup[];
 }

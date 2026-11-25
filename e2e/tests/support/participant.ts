@@ -1,30 +1,42 @@
 import { expect, type Page } from "@playwright/test";
 
 // Демо-организация создаётся командой `manage.py seed_demo_organization` (см. README).
-export const DEMO_ENTRY_CODE = "demo-entry-code";
+const legacy = process.env.E2E_SUITE === "legacy";
+export const DEMO_ENTRY_CODE = process.env.E2E_ENTRY_CODE ?? (legacy ? "demo-entry-code" : "iipb-presentation");
+const DEFAULT_BUNDLE = legacy ? "prodex-v1" : "iipb-0.1";
 
 // Создание сессии/сохранение согласия — асинхронные запросы к API; каждый хелпер дожидается
 // видимого следствия запроса, чтобы тесты не ловили гонку с недорисованным экраном.
 
-export async function enterViaCorporateLink(page: Page, entryCode: string = DEMO_ENTRY_CODE, bundleCode?: string) {
+export async function openTokenNotice(page: Page, entryCode = DEMO_ENTRY_CODE) {
   await page.goto(`/?code=${entryCode}`);
-  await expect(page.locator(".stream-menu, .card > button").first()).toBeVisible();
-  const streams = page.locator(".stream-menu__item");
-  if (await streams.count()) {
-    await streams.first().click();
-  } else {
-    await page.locator(".card > button").first().click();
+  const entryForm = page.locator(".stream-entry-form");
+  await expect(entryForm).toBeVisible();
+  const streamSelect = entryForm.getByLabel("Отдел", { exact: true });
+  if (await streamSelect.count()) {
+    if (legacy) {
+      const demoStream = streamSelect.getByRole("option", { name: /^demo-stream(?: \(demo-stream\))?$/ });
+      const value = await demoStream.getAttribute("value");
+      if (!value) throw new Error("Legacy demo stream is unavailable.");
+      await streamSelect.selectOption(value);
+    } else {
+      await streamSelect.selectOption({ index: 1 });
+    }
   }
-  await expect(page.locator(".bundle-menu__item").first()).toBeVisible();
-  const preferredBundle = bundleCode
-    ? page.locator(`.bundle-menu__item[data-bundle-code="${bundleCode}"]`)
-    : page.locator('.bundle-menu__item[data-bundle-code="prodex-v1"]');
-  if (bundleCode) {
-    await expect(preferredBundle, `Expected demo bundle ${bundleCode}; run the bundle seed commands first.`).toBeVisible();
-    await preferredBundle.click();
-  } else {
-    await (await preferredBundle.count() ? preferredBundle : page.locator(".bundle-menu__item").first()).click();
-  }
+  await entryForm.getByRole("button", { name: "Продолжить" }).click();
+  await expect(page.locator(".token-box code")).toBeVisible();
+}
+
+export async function readParticipantToken(page: Page) {
+  const cookies = await page.context().cookies(page.url());
+  return cookies.find((cookie) => cookie.name === "pez_participant_token")?.value ?? null;
+}
+
+export async function enterViaCorporateLink(page: Page, entryCode = DEMO_ENTRY_CODE, bundleCode = DEFAULT_BUNDLE) {
+  await openTokenNotice(page, entryCode);
+  await page.getByLabel("Я сохранил(а) код участника").check();
+  await page.getByRole("button", { name: "Продолжить" }).click();
+  await resumeBundle(page, bundleCode);
   await expect(page.getByRole("heading", { name: "Добро пожаловать" })).toBeVisible();
 }
 
@@ -60,7 +72,7 @@ export async function startTesting(page: Page, entryCode: string = DEMO_ENTRY_CO
   await acceptConsent(page);
 }
 
-export async function resumeBundle(page: Page, bundleCode = "prodex-v1") {
+export async function resumeBundle(page: Page, bundleCode = DEFAULT_BUNDLE) {
   const bundle = page.locator(`.bundle-menu__item[data-bundle-code="${bundleCode}"]`);
   await expect(bundle).toBeVisible();
   await bundle.click();
@@ -122,14 +134,21 @@ export async function answerCurrentQuestion(page: Page, pick: "min" | "max" = "m
  * независимо от того, как именно реверсивны конкретные пункты HADS/СШХ.
  */
 export async function completeStage(page: Page, pick: "min" | "max" = "min") {
+  const followupButton = page.getByRole("button", { name: "Перейти к итоговым тестам" });
+  if (await followupButton.isVisible()) await followupButton.click();
   await dismissStageIntro(page); // предыдущий этап мог завершиться стартовым экраном следующего
   const stageRoot = page.locator("[data-stage]").first();
   const targetStage = await stageRoot.getAttribute("data-stage");
   if (!targetStage) throw new Error("The current testing stage is missing.");
+  const report = page.locator(".report-grid");
+  const progress = page.locator(".progress-track");
+  const menu = page.locator(".test-menu");
+  const nextScreen = report.or(followupButton).or(progress).or(menu);
 
   for (let safety = 0; safety < 20; safety += 1) {
-    if (await page.locator(".report-grid").count()) return;
-    if (await page.locator(".progress-track").count()) {
+    await expect(nextScreen.first()).toBeVisible();
+    if ((await report.isVisible()) || (await followupButton.isVisible())) return;
+    if (await progress.isVisible()) {
       const total = await readTotalQuestions(page);
       const answeredAttribute = await page.locator("[data-answered-count]").getAttribute("data-answered-count");
       const answered = Number(answeredAttribute ?? 0);
@@ -137,7 +156,6 @@ export async function completeStage(page: Page, pick: "min" | "max" = "min") {
       continue;
     }
 
-    const menu = page.locator(".test-menu");
     await expect(menu).toBeVisible();
     const menuStage = await menu.locator("xpath=..").getAttribute("data-stage");
     if (menuStage !== targetStage) return;

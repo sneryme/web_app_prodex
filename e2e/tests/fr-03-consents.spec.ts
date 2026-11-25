@@ -22,14 +22,17 @@ test.describe("FR-03 Экран согласий и журнал согласи�
 
   test("FR-03.3 без согласия переход к вопросам невозможен, в том числе прямым запросом к API", async ({ request }) => {
     const created = await request.post(`${API_URL}/participant/sessions/`, { data: { entry_code: DEMO_ENTRY_CODE } });
-    const { token, questions } = await created.json();
+    const { token, bundles } = await created.json();
+    const bundle = bundles.find((item: {code: string}) => item.code === "prodex-v1");
+    expect(bundle).toBeTruthy();
+    const state = await request.post(`${API_URL}/participant/sessions/${token}/bundles/`, { data: { bundle_id: bundle.id } });
     // На этом этапе вопросов в ответе ещё нет (согласие не дано); берём id напрямую через сервис было бы избыточно —
     // проверяем сам факт отказа в сохранении ответа для заведомо любого question_id.
     const response = await request.post(`${API_URL}/participant/sessions/${token}/answers/`, {
-      data: { question_id: 1, option_id: null },
+      data: { bundle_id: bundle.id, stage: "baseline", question_id: 1, option_id: null },
     });
     expect(response.status()).toBe(403);
-    expect(questions).toEqual([]);
+    expect((await state.json()).questions).toEqual([]);
   });
 
   test("FR-03.4 факт согласия сохраняется с версией текста и временем", async ({ page }) => {

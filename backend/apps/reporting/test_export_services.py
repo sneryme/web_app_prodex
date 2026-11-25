@@ -34,21 +34,21 @@ def _overview(suppressed: bool) -> dict:
 def test_xlsx_export_marks_suppressed_small_groups_instead_of_showing_a_mean():
     body = export_services.build_xlsx(_overview(suppressed=True))
     wb = load_workbook(io.BytesIO(body))
-    ws = wb.active
-
-    rows_text = " ".join(str(cell.value) for row in ws.iter_rows() for cell in row if cell.value is not None)
-    assert "скрыто" in rows_text
-    assert "9.5" not in rows_text  # среднее подавленной группы не должно просочиться
+    ws = wb["Тревога (HADS)"]
+    assert wb["Сводка"]["B6"].value == 2
+    assert ws["B5"].value == 2
+    assert ws["C5"].value is None
+    assert ws["D5"].value == "Скрыты: малая группа"
 
 
 def test_xlsx_export_shows_mean_and_distribution_for_a_group_above_threshold():
     body = export_services.build_xlsx(_overview(suppressed=False))
     wb = load_workbook(io.BytesIO(body))
-    ws = wb.active
-
-    rows_text = " ".join(str(cell.value) for row in ws.iter_rows() for cell in row if cell.value is not None)
-    assert "9.5" in rows_text
-    assert "норма: 8" in rows_text
+    ws = wb["Тревога (HADS)"]
+    assert ws["C4"].value == "Среднее"
+    assert ws["C5"].value == 9.5
+    assert ws["D4"].value == "норма"
+    assert ws["D5"].value == 8
 
 
 @pytest.mark.parametrize("suppressed", [True, False])

@@ -64,13 +64,14 @@ def _select_bundle(client, token, bundle):
     return response.data
 
 
-def _answer_stage(client, token, bundle, questions, stage):
+def _answer_stage(client, token, bundle, questions, stage, next_stage):
     responses = []
     for question in questions:
         response = client.post(
             f"/api/participant/sessions/{token}/answers/",
             {
                 "bundle_id": bundle.pk,
+                "stage": stage,
                 "question_id": question.pk,
                 "option_id": question.options.first().pk,
             },
@@ -78,7 +79,7 @@ def _answer_stage(client, token, bundle, questions, stage):
         )
         assert response.status_code == 200
         responses.append(response)
-    assert responses[-1].data["stage"] == stage
+    assert responses[-1].data["stage"] == next_stage
 
 
 @pytest.mark.django_db
@@ -142,7 +143,23 @@ def test_participant_can_complete_one_bundle_resume_and_keep_other_bundle_separa
     )
     assert consent.status_code == 201
 
-    _answer_stage(client, token, bundle_a, questions, "followup")
+    _answer_stage(client, token, bundle_a, questions, "baseline", "followup")
+
+    answer_url = f"/api/participant/sessions/{token}/answers/"
+    last_question = questions[-1]
+    last_answer = {
+        "bundle_id": bundle_a.pk,
+        "question_id": last_question.pk,
+        "option_id": last_question.options.first().pk,
+    }
+    missing_stage = client.post(answer_url, last_answer, format="json")
+    assert missing_stage.status_code == 400
+    assert "stage" in missing_stage.data
+    stale_answer = client.post(answer_url, {**last_answer, "stage": "baseline"}, format="json")
+    assert stale_answer.status_code == 409
+    assert stale_answer.data["code"] == "stage_mismatch"
+    stored = AnswerResponse.objects.filter(token__token=token, bundle=bundle_a, question=last_question)
+    assert list(stored.values_list("stage", "selected_option_id")) == [("baseline", last_answer["option_id"])]
 
     # Simulate the participant closing the browser and resuming with the token.
     resumed = client.get(f"/api/participant/sessions/{token}/")
@@ -155,7 +172,7 @@ def test_participant_can_complete_one_bundle_resume_and_keep_other_bundle_separa
     assert followup["stage"] == "followup"
     assert followup["progress"] == {"answered": 0, "total": len(questions)}
 
-    _answer_stage(client, token, bundle_a, questions, None)
+    _answer_stage(client, token, bundle_a, questions, "followup", None)
 
     completed = client.get(f"/api/participant/sessions/{token}/")
     assert {item["id"]: item["status"] for item in completed.data["bundles"]} == {
@@ -175,6 +192,7 @@ def test_participant_can_complete_one_bundle_resume_and_keep_other_bundle_separa
         f"/api/participant/sessions/{token}/answers/",
         {
             "bundle_id": bundle_a.pk,
+            "stage": "followup",
             "question_id": questions[0].pk,
             "option_id": questions[0].options.first().pk,
         },
@@ -191,6 +209,7 @@ def test_participant_can_complete_one_bundle_resume_and_keep_other_bundle_separa
         f"/api/participant/sessions/{token}/answers/",
         {
             "bundle_id": bundle_b.pk,
+            "stage": "baseline",
             "question_id": questions[0].pk,
             "option_id": questions[0].options.first().pk,
         },

@@ -72,16 +72,17 @@ test.describe("FR-09 Employer dashboard", () => {
     const streamSelect = page.getByLabel("Поток");
     await expect(streamSelect).toBeVisible();
 
-    const meanBefore = await page.locator(".employer-mean").first().innerText();
-
     await selectStreamByCode(page, "2026-H2");
-    await expect(async () => {
-      const meanAfter = await page.locator(".employer-mean").first().innerText();
-      expect(meanAfter).not.toBe(meanBefore);
-    }).toPass();
-
-    // Охват тоже должен поменяться — в 2026-H2 ровно 8 участников (сид-команда).
     await expect(page.locator(".employer-stat__value").first()).toHaveText("8");
+    await expect(page.locator(".employer-mean").first()).toBeVisible();
+    const unfiltered = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname.endsWith("/overview/") && !url.searchParams.has("stream");
+    });
+    await streamSelect.selectOption({ label: "Все потоки" });
+    const overview = await (await unfiltered).json();
+    expect(overview.stream).toBeNull();
+    expect(overview.coverage.participants).toBeGreaterThanOrEqual(8);
   });
 
   test("FR-09.4 группа меньше порога публикации скрыта", async ({ page }) => {

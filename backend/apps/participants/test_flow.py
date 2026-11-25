@@ -84,7 +84,7 @@ def test_answering_without_consent_is_rejected(client, organization, questionnai
     token = services.create_session(organization.entry_code)
     response = client.post(
         f"/api/participant/sessions/{token.token}/answers/",
-        {"question_id": questionnaire[0].id, "option_id": questionnaire[0].options.first().id},
+        {"stage": "baseline", "question_id": questionnaire[0].id, "option_id": questionnaire[0].options.first().id},
         format="json",
     )
     assert response.status_code == 403
@@ -117,7 +117,7 @@ def test_declining_consent_ends_the_route_without_saving_answers(client, organiz
 
     response = client.post(
         f"/api/participant/sessions/{token.token}/answers/",
-        {"question_id": questionnaire[0].id, "option_id": questionnaire[0].options.first().id},
+        {"stage": "baseline", "question_id": questionnaire[0].id, "option_id": questionnaire[0].options.first().id},
         format="json",
     )
     assert response.status_code == 403
@@ -127,7 +127,7 @@ def test_declining_consent_ends_the_route_without_saving_answers(client, organiz
 # --- FR-04 + FR-06: этапы и ответы ------------------------------------------
 
 def _grant_consent(client, token):
-    client.post(
+    return client.post(
         f"/api/participant/sessions/{token.token}/consents/",
         {"consent_type": "data_processing", "text_version": "v1", "accepted": True},
         format="json",
@@ -137,8 +137,7 @@ def _grant_consent(client, token):
 @pytest.mark.django_db
 def test_new_token_starts_on_baseline_stage(client, organization, questionnaire):
     token = services.create_session(organization.entry_code)
-    _grant_consent(client, token)
-    state = client.get(f"/api/participant/sessions/{token.token}/").data
+    state = _grant_consent(client, token).data
     assert state["stage"] == "baseline"
     assert state["progress"] == {"answered": 0, "total": len(questionnaire)}
     # Ни одного ответа ещё нет — фронтенд должен показать стартовый экран этапа, а не вопросы
@@ -151,12 +150,13 @@ def test_stage_status_switches_to_in_progress_after_the_first_answer(client, org
     token = services.create_session(organization.entry_code)
     _grant_consent(client, token)
 
-    client.post(
+    response = client.post(
         f"/api/participant/sessions/{token.token}/answers/",
-        {"question_id": questionnaire[0].id, "option_id": questionnaire[0].options.first().id},
+        {"stage": "baseline", "question_id": questionnaire[0].id, "option_id": questionnaire[0].options.first().id},
         format="json",
     )
-    state = client.get(f"/api/participant/sessions/{token.token}/").data
+    assert response.status_code == 200
+    state = response.data
     # Этап уже начат — перезагрузка должна вернуть прямо к вопросу (ТЗ FR-06.3/FR-06.4), а не на
     # стартовый экран заново.
     assert state["stage"] == "baseline"
@@ -172,12 +172,12 @@ def test_completing_baseline_switches_to_followup_automatically(client, organiza
     for question in questionnaire:
         response = client.post(
             f"/api/participant/sessions/{token.token}/answers/",
-            {"question_id": question.id, "option_id": question.options.first().id},
+            {"stage": "baseline", "question_id": question.id, "option_id": question.options.first().id},
             format="json",
         )
         assert response.status_code == 200
 
-    state = client.get(f"/api/participant/sessions/{token.token}/").data
+    state = response.data
     assert state["stage"] == "followup"
     assert state["progress"] == {"answered": 0, "total": len(questionnaire)}
     # Входной этап завершён, итоговый ещё не начат — снова стартовый экран, теперь перед followup.
@@ -189,15 +189,9 @@ def test_completing_both_stages_leaves_no_active_stage(client, organization, que
     token = services.create_session(organization.entry_code)
     _grant_consent(client, token)
 
-    for _ in range(2):  # baseline, затем followup
-        for question in questionnaire:
-            client.post(
-                f"/api/participant/sessions/{token.token}/answers/",
-                {"question_id": question.id, "option_id": question.options.first().id},
-                format="json",
-            )
+    _complete_stage(client, token, questionnaire, option_index=0, stage="baseline")
+    state = _complete_stage(client, token, questionnaire, option_index=0, stage="followup")
 
-    state = client.get(f"/api/participant/sessions/{token.token}/").data
     assert state["stage"] is None
 
 
@@ -208,34 +202,37 @@ def test_followup_cannot_be_reached_via_direct_answer_before_baseline_is_done(cl
     _grant_consent(client, token)
 
     first_question = questionnaire[0]
-    client.post(
+    response = client.post(
         f"/api/participant/sessions/{token.token}/answers/",
-        {"question_id": first_question.id, "option_id": first_question.options.first().id},
+        {"stage": "followup", "question_id": first_question.id, "option_id": first_question.options.first().id},
         format="json",
     )
-    assert AnswerResponse.objects.filter(stage="followup").count() == 0
+    assert response.status_code == 409
+    assert response.data["code"] == "stage_mismatch"
+    assert not token.answers.exists()
     assert services.current_stage(token) == "baseline"
 
 
 @pytest.mark.django_db
-def test_answer_submission_is_idempotent(client, organization, questionnaire):
+def test_answer_submission_is_idempotent(client, organization, full_questionnaire):
     # ТЗ FR-06.6: повторная отправка того же вопроса не создаёт дублей и не портит счётчик прогресса.
     token = services.create_session(organization.entry_code)
     _grant_consent(client, token)
-    question = questionnaire[0]
+    question = full_questionnaire[0]
     options = list(question.options.all())
 
     client.post(
         f"/api/participant/sessions/{token.token}/answers/",
-        {"question_id": question.id, "option_id": options[0].id},
+        {"stage": "baseline", "question_id": question.id, "option_id": options[0].id},
         format="json",
     )
     response = client.post(
         f"/api/participant/sessions/{token.token}/answers/",
-        {"question_id": question.id, "option_id": options[1].id},
+        {"stage": "baseline", "question_id": question.id, "option_id": options[1].id},
         format="json",
     )
 
+    assert response.status_code == 200
     assert AnswerResponse.objects.filter(token=token, stage="baseline", question=question).count() == 1
     assert response.data["progress"]["answered"] == 1
     stored = AnswerResponse.objects.get(token=token, stage="baseline", question=question)
@@ -248,7 +245,7 @@ def test_answering_unknown_question_is_rejected(client, organization, questionna
     _grant_consent(client, token)
     response = client.post(
         f"/api/participant/sessions/{token.token}/answers/",
-        {"question_id": 999999, "option_id": None},
+        {"stage": "baseline", "question_id": 999999, "option_id": None},
         format="json",
     )
     assert response.status_code == 400
@@ -287,14 +284,16 @@ def full_questionnaire(db):
     return questions
 
 
-def _complete_stage(client, token, questions, option_index):
+def _complete_stage(client, token, questions, *, option_index, stage):
     for question in questions:
         option = list(question.options.all())[option_index]
-        client.post(
+        response = client.post(
             f"/api/participant/sessions/{token.token}/answers/",
-            {"question_id": question.id, "option_id": option.id},
+            {"stage": stage, "question_id": question.id, "option_id": option.id},
             format="json",
         )
+        assert response.status_code == 200
+    return response.data
 
 
 @pytest.mark.django_db
@@ -317,8 +316,8 @@ def test_report_endpoint_returns_five_cards_after_both_stages(client, organizati
     token = services.create_session(organization.entry_code)
     _grant_consent(client, token)
 
-    _complete_stage(client, token, full_questionnaire, option_index=1)  # baseline: все «Сильно»
-    _complete_stage(client, token, full_questionnaire, option_index=0)  # followup: все «Совсем нет»
+    _complete_stage(client, token, full_questionnaire, option_index=1, stage="baseline")
+    _complete_stage(client, token, full_questionnaire, option_index=0, stage="followup")
 
     response = client.get(f"/api/participant/reports/{token.token}/")
     assert response.status_code == 200
@@ -337,17 +336,12 @@ def test_report_endpoint_returns_five_cards_after_both_stages(client, organizati
 def test_answering_after_both_stages_complete_returns_conflict(client, organization, questionnaire):
     token = services.create_session(organization.entry_code)
     _grant_consent(client, token)
-    for _ in range(2):
-        for question in questionnaire:
-            client.post(
-                f"/api/participant/sessions/{token.token}/answers/",
-                {"question_id": question.id, "option_id": question.options.first().id},
-                format="json",
-            )
+    _complete_stage(client, token, questionnaire, option_index=0, stage="baseline")
+    _complete_stage(client, token, questionnaire, option_index=0, stage="followup")
 
     response = client.post(
         f"/api/participant/sessions/{token.token}/answers/",
-        {"question_id": questionnaire[0].id, "option_id": questionnaire[0].options.first().id},
+        {"stage": "followup", "question_id": questionnaire[0].id, "option_id": questionnaire[0].options.first().id},
         format="json",
     )
     assert response.status_code == 409

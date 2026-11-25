@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError } from "../httpClient";
 import {
   clearSession,
   downloadExport,
   getBundles,
+  getComparison,
   getOrganizations,
   getOverview,
   getStaffInfo,
@@ -14,7 +15,8 @@ import {
   setSession,
   type StaffInfo,
 } from "./api";
-import type { BundleSummary, OrganizationOverview, OrganizationSummary, StreamSummary } from "./types";
+import type { BundleSummary, ComparisonResult, OrganizationOverview, OrganizationSummary, StreamSummary } from "./types";
+import { IIPBOverviewCard } from "./IIPBOverviewCard";
 
 const TREND_LABEL: Record<string, string> = { improved: "Улучшение", worsened: "Ухудшение", stable: "Без изменений" };
 
@@ -100,8 +102,17 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
   const [bundles, setBundles] = useState<BundleSummary[] | null>(null);
   const [bundleId, setBundleId] = useState<number | null>(null);
   const [overview, setOverview] = useState<OrganizationOverview | null>(null);
+  const [dashboardMode, setDashboardMode] = useState<"overview" | "streams" | "periods">("overview");
+  const [selectedStreamIds, setSelectedStreamIds] = useState<number[]>([]);
+  const [periodAFrom, setPeriodAFrom] = useState("");
+  const [periodATo, setPeriodATo] = useState("");
+  const [periodBFrom, setPeriodBFrom] = useState("");
+  const [periodBTo, setPeriodBTo] = useState("");
+  const [comparison, setComparison] = useState<ComparisonResult | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const comparisonRequestId = useRef(0);
   const [error, setError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
+  const [exporting, setExporting] = useState<"pdf" | "xlsx" | "csv" | null>(null);
 
   function handleError(e: unknown, fallback: string) {
     if (e instanceof ApiError && e.status === 401) {
@@ -112,42 +123,99 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
   }
 
   useEffect(() => {
+    let active = true;
     getOrganizations()
       .then((orgs) => {
+        if (!active) return;
         setOrganizations(orgs);
-        if (orgs.length > 0) setOrganizationId(orgs[0].id);
+        setOrganizationId((current) => current ?? orgs[0]?.id ?? null);
       })
-      .catch((e) => handleError(e, "Не удалось загрузить список организаций."));
+      .catch((e) => {
+        if (active) handleError(e, "Не удалось загрузить список организаций.");
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
     if (organizationId === null) return;
-    setStreamId(null);
-    setStreams(null);
+    let active = true;
     getStreams(organizationId)
-      .then(setStreams)
-      .catch((e) => handleError(e, "Не удалось загрузить список потоков."));
+      .then((items) => {
+        if (!active) return;
+        setStreams(items);
+        setSelectedStreamIds(items.slice(0, 2).map((item) => item.id));
+        setComparison(null);
+      })
+      .catch((e) => {
+        if (active) handleError(e, "Не удалось загрузить список потоков.");
+      });
+    return () => {
+      active = false;
+    };
   }, [organizationId]);
 
   useEffect(() => {
     if (organizationId === null) return;
-    setBundles(null);
-    setBundleId(null);
+    let active = true;
     getBundles(organizationId).then((items) => {
+      if (!active) return;
       setBundles(items);
       setBundleId(items[0]?.id ?? null);
-    }).catch((e) => handleError(e, "Не удалось загрузить комплекты тестов."));
+    }).catch((e) => {
+      if (active) handleError(e, "Не удалось загрузить комплекты тестов.");
+    });
+    return () => {
+      active = false;
+    };
   }, [organizationId]);
 
   useEffect(() => {
-    if (organizationId === null || bundles === null) return;
+    if (organizationId === null || bundles === null || dashboardMode !== "overview") return;
     getOverview(organizationId, streamId, bundleId)
       .then((data) => {
         setOverview(data);
         setError(null);
       })
       .catch((e) => handleError(e, "Не удалось загрузить агрегаты."));
-  }, [organizationId, streamId, bundleId, bundles]);
+  }, [organizationId, streamId, bundleId, bundles, dashboardMode]);
+
+  async function handleCompare() {
+    if (organizationId === null || bundles === null || dashboardMode === "overview") return;
+    const requestId = ++comparisonRequestId.current;
+    const requestedOrganizationId = organizationId;
+    const requestedMode = dashboardMode;
+    const params = new URLSearchParams({ mode: dashboardMode });
+    if (dashboardMode === "streams") {
+      if (selectedStreamIds.length < 2 || selectedStreamIds.length > 4) {
+        setError("Выберите от 2 до 4 потоков для сравнения.");
+        return;
+      }
+      params.set("streams", selectedStreamIds.join(","));
+    } else {
+      params.set("period_a_from", periodAFrom);
+      params.set("period_a_to", periodATo);
+      params.set("period_b_from", periodBFrom);
+      params.set("period_b_to", periodBTo);
+    }
+    setComparing(true);
+    setComparison(null);
+    setError(null);
+    try {
+      const result = await getComparison(requestedOrganizationId, bundleId, params);
+      if (requestId !== comparisonRequestId.current) return;
+      if (result.groups.some((group) => group.overview.organization.id !== requestedOrganizationId)) {
+        throw new Error("Сервер вернул данные другой организации. Обновите страницу и повторите запрос.");
+      }
+      if (requestedMode !== dashboardMode || requestedOrganizationId !== organizationId) return;
+      setComparison(result);
+    } catch (e) {
+      if (requestId === comparisonRequestId.current) handleError(e, "Не удалось сравнить выбранные группы.");
+    } finally {
+      if (requestId === comparisonRequestId.current) setComparing(false);
+    }
+  }
 
   async function handleLogout() {
     try {
@@ -158,7 +226,7 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
     onSessionExpired();
   }
 
-  async function handleExport(format: "pdf" | "xlsx") {
+  async function handleExport(format: "pdf" | "xlsx" | "csv") {
     if (organizationId === null) return;
     setExporting(format);
     try {
@@ -188,12 +256,34 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
           </div>
         </div>
         <h1>Динамика по группе «до / после»</h1>
+        <nav className="employer-view-mode" aria-label="Режим дашборда">
+          <button type="button" aria-pressed={dashboardMode === "overview"} onClick={() => { comparisonRequestId.current += 1; setDashboardMode("overview"); setComparison(null); setComparing(false); setError(null); }}>
+            Обзор
+          </button>
+          <button type="button" aria-pressed={dashboardMode === "streams"} onClick={() => { comparisonRequestId.current += 1; setDashboardMode("streams"); setComparison(null); setComparing(false); setError(null); }}>
+            Сравнить потоки
+          </button>
+          <button type="button" aria-pressed={dashboardMode === "periods"} onClick={() => { comparisonRequestId.current += 1; setDashboardMode("periods"); setComparison(null); setComparing(false); setError(null); }}>
+            Сравнить периоды
+          </button>
+        </nav>
         <div className="employer-filters">
           <label>
             Организация
             <select
               value={organizationId ?? ""}
-              onChange={(e) => setOrganizationId(Number(e.target.value))}
+              onChange={(e) => {
+                comparisonRequestId.current += 1;
+                setOrganizationId(Number(e.target.value));
+                setStreamId(null);
+                setStreams(null);
+                setSelectedStreamIds([]);
+                setBundles(null);
+                setBundleId(null);
+                setComparison(null);
+                setComparing(false);
+                setOverview(null);
+              }}
               disabled={!organizations}
             >
               {(organizations ?? []).map((org) => (
@@ -203,7 +293,7 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
               ))}
             </select>
           </label>
-          <label>
+          {dashboardMode === "overview" && <label>
             Поток
             <select
               value={streamId ?? "all"}
@@ -213,17 +303,22 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
               <option value="all">Все потоки</option>
               {(streams ?? []).map((stream) => (
                 <option key={stream.id} value={stream.id}>
-                  {stream.code}
-                  {stream.name ? ` · ${stream.name}` : ""} ({stream.participant_count})
+                  {stream.name || `Поток ${stream.id}`}
                 </option>
               ))}
             </select>
-          </label>
+          </label>}
           <label>
             Комплект тестов
             <select
               value={bundleId ?? ""}
-              onChange={(e) => setBundleId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => {
+                comparisonRequestId.current += 1;
+                setBundleId(e.target.value ? Number(e.target.value) : null);
+                setComparison(null);
+                setComparing(false);
+                setOverview(null);
+              }}
               disabled={!bundles}
             >
               {(bundles ?? []).map((bundle) => (
@@ -231,21 +326,72 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
               ))}
             </select>
           </label>
-          <div className="employer-export">
+          {dashboardMode === "overview" && <div className="employer-export">
             <button type="button" disabled={!overview || exporting !== null} onClick={() => handleExport("xlsx")}>
               {exporting === "xlsx" ? "Готовим…" : "Скачать XLSX"}
             </button>
             <button type="button" disabled={!overview || exporting !== null} onClick={() => handleExport("pdf")}>
               {exporting === "pdf" ? "Готовим…" : "Скачать PDF"}
             </button>
-          </div>
+            <button type="button" disabled={!overview || exporting !== null} onClick={() => handleExport("csv")}>
+              {exporting === "csv" ? "Готовим…" : "Скачать CSV"}
+            </button>
+          </div>}
+          {dashboardMode === "overview" && <p className="employer-export__note">XLSX: отдельный лист для каждого показателя, зоны распределения вынесены в отдельные столбцы. CSV остаётся одной таблицей, значения зон тоже разнесены по столбцам.</p>}
         </div>
+        {dashboardMode === "streams" && (
+          <section className="employer-compare-controls" aria-label="Выбор потоков для сравнения">
+            <p>Выберите от 2 до 4 потоков. Каждый поток будет проверен по собственному порогу публикации.</p>
+            <div className="employer-stream-options">
+              {(streams ?? []).map((stream) => (
+                <label key={stream.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedStreamIds.includes(stream.id)}
+                    disabled={!selectedStreamIds.includes(stream.id) && selectedStreamIds.length >= 4}
+                    onChange={(event) => {
+                      comparisonRequestId.current += 1;
+                      setSelectedStreamIds((current) => event.target.checked
+                        ? [...current, stream.id]
+                        : current.filter((id) => id !== stream.id));
+                      setComparison(null);
+                    }}
+                  />
+                  <span>{stream.name || `Поток ${stream.id}`}</span>
+                </label>
+              ))}
+            </div>
+            <button type="button" onClick={() => void handleCompare()} disabled={comparing || !streams || !bundles || selectedStreamIds.length < 2}>
+              {comparing ? "Сравниваем…" : "Показать сравнение"}
+            </button>
+          </section>
+        )}
+        {dashboardMode === "periods" && (
+          <section className="employer-compare-controls" aria-label="Выбор периодов для сравнения">
+            <p>Когорта определяется по дате создания сессии участника. Периоды должны быть непересекающимися.</p>
+            <div className="employer-period-options">
+              <fieldset>
+                <legend>Первый период</legend>
+                <label>С даты <input type="date" value={periodAFrom} onChange={(event) => { comparisonRequestId.current += 1; setPeriodAFrom(event.target.value); setComparison(null); setComparing(false); }} /></label>
+                <label>По дату <input type="date" value={periodATo} onChange={(event) => { comparisonRequestId.current += 1; setPeriodATo(event.target.value); setComparison(null); setComparing(false); }} /></label>
+              </fieldset>
+              <fieldset>
+                <legend>Второй период</legend>
+                <label>С даты <input type="date" value={periodBFrom} onChange={(event) => { comparisonRequestId.current += 1; setPeriodBFrom(event.target.value); setComparison(null); setComparing(false); }} /></label>
+                <label>По дату <input type="date" value={periodBTo} onChange={(event) => { comparisonRequestId.current += 1; setPeriodBTo(event.target.value); setComparison(null); setComparing(false); }} /></label>
+              </fieldset>
+            </div>
+            <button type="button" onClick={() => void handleCompare()} disabled={comparing || !bundles || !periodAFrom || !periodATo || !periodBFrom || !periodBTo}>
+              {comparing ? "Сравниваем…" : "Показать сравнение"}
+            </button>
+          </section>
+        )}
       </header>
 
       {error && <p className="employer-error">{error}</p>}
-      {!overview && !error && <p className="employer-loading">Загрузка…</p>}
+      {dashboardMode === "overview" && !overview && !error && <p className="employer-loading">Загрузка…</p>}
 
-      {overview && (
+      {dashboardMode === "overview" && overview && (
         <>
           <section className="employer-summary">
             <div className="employer-stat">
@@ -262,6 +408,7 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
             </div>
           </section>
 
+          {overview.iipb && <IIPBOverviewCard data={overview.iipb} />}
           <section className="employer-indicators">
             {overview.indicators.map((indicator) => (
               <article key={indicator.indicator_code} className="employer-card">
@@ -292,12 +439,12 @@ function Dashboard({ staff, onSessionExpired }: { staff: StaffInfo | null; onSes
           </section>
 
           <p className="employer-footnote">
-            Показатели не объединяются в общий индекс — EQ-5D, HADS и Спилбергер–Ханин остаются
-            отдельными методиками. Индивидуальные ответы и токены участников работодателю не
-            передаются.
+            {overview.iipb ? "ИИПБ рассчитывается по методологии v0.1 от 16.11.2026. Личностная тревожность — только фоновый маркер. " : "Результаты показаны по отдельным шкалам. "}
+            Индивидуальные ответы и токены участников работодателю не передаются.
           </p>
         </>
       )}
+      {comparison && <ComparisonResults comparison={comparison} />}
     </div>
   );
 }
@@ -333,5 +480,53 @@ function SuppressedNote({ count }: { count: number }) {
       Группа слишком мала для публикации ({count} участник(ов)) — данные скрыты, чтобы не
       раскрыть результат конкретного человека.
     </p>
+  );
+}
+
+function ComparisonResults({ comparison }: { comparison: ComparisonResult }) {
+  return (
+    <section className="employer-comparison-results">
+      <h2>{comparison.mode === "streams" ? "Сравнение потоков" : "Сравнение периодов"}</h2>
+      <div className="employer-comparison-groups">
+        {comparison.groups.map(({ key, label, threshold, overview }) => (
+          <article className="employer-comparison-group" key={key}>
+            <header>
+              <h3>{label}</h3>
+              <p>
+                Участников: {overview.coverage.participants} · порог публикации: {threshold}
+              </p>
+              <p>
+                Входной этап завершили: {overview.completion.baseline_completed} · итоговый: {overview.completion.followup_completed}
+              </p>
+            </header>
+            {overview.iipb && <IIPBOverviewCard data={overview.iipb} />}
+            {overview.indicators.map((indicator) => (
+              <section className="employer-comparison-indicator" key={indicator.indicator_code}>
+                <h4>{indicator.label}</h4>
+                <div className="employer-card__stages">
+                  <StageColumn title="Входной этап" block={indicator.baseline} />
+                  <StageColumn title="Итоговый этап" block={indicator.followup} />
+                </div>
+                <div className="employer-card__trend">
+                  {indicator.trend.is_suppressed ? (
+                    <SuppressedNote count={indicator.trend.paired_count} />
+                  ) : (
+                    <>
+                      <span className="employer-trend employer-trend--improved">Улучшение: {indicator.trend.improved}</span>
+                      <span className="employer-trend employer-trend--worsened">Ухудшение: {indicator.trend.worsened}</span>
+                      <span className="employer-trend employer-trend--stable">Без изменений: {indicator.trend.stable}</span>
+                    </>
+                  )}
+                </div>
+              </section>
+            ))}
+          </article>
+        ))}
+      </div>
+      <p className="employer-footnote">
+        Средние значения и распределения скрыты отдельно для каждого показателя и этапа, если число результатов меньше порога группы.
+        У динамики применяется порог к числу участников с парой результатов «вход/итог».
+      </p>
+    </section>
   );
 }

@@ -1,10 +1,17 @@
 import { request } from "./httpClient";
-import type { ParticipantHomeState, ParticipantStream, PersonalReport, SessionState } from "./types";
+import type { ParticipantEntryContext, ParticipantHomeState, ParticipantStream, PersonalReport, SessionState } from "./types";
 
 export { ApiError } from "./httpClient";
 
 export function getAvailableStreams(entryCode: string): Promise<ParticipantStream[]> {
   return request<ParticipantStream[]>("/participant/streams/", {
+    method: "POST",
+    body: JSON.stringify({ entry_code: entryCode }),
+  });
+}
+
+export function getEntryContext(entryCode: string): Promise<ParticipantEntryContext> {
+  return request<ParticipantEntryContext>("/participant/entry/", {
     method: "POST",
     body: JSON.stringify({ entry_code: entryCode }),
   });
@@ -40,7 +47,7 @@ export function sendConsent(
 
 export function submitAnswer(
   token: string,
-  payload: { bundle_id: number; question_id: number; option_id?: number | null; raw_value?: string },
+  payload: { bundle_id: number; stage: NonNullable<SessionState["stage"]>; question_id: number; option_id?: number | null; raw_value?: string },
 ): Promise<SessionState> {
   return request<SessionState>(`/participant/sessions/${encodeURIComponent(token)}/answers/`, {
     method: "POST",

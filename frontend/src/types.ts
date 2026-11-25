@@ -20,8 +20,14 @@ export interface QuestionDTO {
 
 export interface SessionState {
   token: string;
+  is_test?: boolean;
   bundle_id: number | null;
   bundle_name: string;
+  methodology?: string;
+  followup_locked?: boolean;
+  followup_available_at?: string | null;
+  baseline_result?: IIPBMeasurement | null;
+  routing_contacts?: RoutingContacts;
   consent_status: ConsentStatus;
   stage: Stage;
   stage_status: StageStatus;
@@ -34,6 +40,7 @@ export interface BundleChoice {
   id: number;
   code: string;
   name: string;
+  methodology?: string;
   status: "not_started" | "in_progress" | "completed";
   baseline: { answered: number; total: number };
   followup: { answered: number; total: number };
@@ -48,6 +55,8 @@ export interface BundleChoice {
 
 export interface ParticipantHomeState {
   token: string;
+  is_test?: boolean;
+  organization_id: number;
   consent_status: ConsentStatus;
   bundles: BundleChoice[];
 }
@@ -56,6 +65,11 @@ export interface ParticipantStream {
   id: number;
   code: string;
   name: string;
+}
+
+export interface ParticipantEntryContext {
+  organization_id: number;
+  streams: ParticipantStream[];
 }
 
 export type Trend = "improved" | "worsened" | "stable";
@@ -78,9 +92,44 @@ export interface Eq5dProfileItem {
 
 export interface PersonalReport {
   token: string;
+  is_test?: boolean;
   summary: string;
   improved_count: number;
   total_count: number;
   cards: ReportCard[];
   eq5d_profile: Eq5dProfileItem[];
+  methodology?: string;
+  status?: "baseline_only" | "completed";
+  routing_contacts?: RoutingContacts;
+  iipb?: { baseline: IIPBMeasurement; followup: IIPBMeasurement | null; dynamics: IIPBDynamics | null };
+}
+
+export interface RoutingContacts { specialist: string; physician: string }
+export interface IIPBFlag { code: string; label: string; action: string }
+export interface IIPBMeasurement {
+  version: string;
+  version_date: string;
+  measured_at: string;
+  notice: string;
+  index: number;
+  level: string;
+  level_label: string;
+  conclusion: string;
+  action: string;
+  red_flags: IIPBFlag[];
+  yellow_flags: IIPBFlag[];
+  trait_marker: { raw_score: number; label: string };
+  inputs: Record<string, number>;
+  lss: number;
+  domains: Record<string, number>;
+  subindices: Record<string, number>;
+}
+export interface IIPBDynamics {
+  delta_pp: number;
+  delta_percent: number | null;
+  level_change: string;
+  trend: Trend;
+  summary: string;
+  notice: string;
+  actions: string[];
 }

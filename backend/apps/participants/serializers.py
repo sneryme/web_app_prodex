@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.assessments.models import AnswerResponse
+
 from .models import ConsentRecord
 
 
@@ -27,6 +29,7 @@ class ConsentSerializer(serializers.Serializer):
 
 class AnswerSerializer(serializers.Serializer):
     bundle_id = serializers.IntegerField(required=False, allow_null=True)
+    stage = serializers.ChoiceField(choices=AnswerResponse.STAGE_CHOICES)
     question_id = serializers.IntegerField()
     option_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     raw_value = serializers.CharField(required=False, allow_blank=True, default="")

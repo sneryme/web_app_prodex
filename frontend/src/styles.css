@@ -64,18 +64,18 @@ h1{font-family:var(--font-heading);font-weight:800;font-size:clamp(32px,6vw,56px
 .test-menu__name{font-family:var(--font-heading);font-weight:700}
 .test-menu__status{font-size:13px;font-weight:500;color:var(--color-text-muted);text-align:right}
 @media(max-width:520px){.card .test-menu__item{align-items:flex-start;flex-direction:column;gap:6px}.test-menu__status{text-align:left}}
-.stream-menu{display:grid;gap:12px;margin-top:22px}
-.card .stream-menu__item{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;padding:18px 20px;text-align:left;background:#fff;color:var(--color-navy);border:1px solid var(--color-border);border-radius:12px}
-.card .stream-menu__item:hover{background:#fff4ec;border-color:var(--color-primary)}
-.stream-menu__name{font-family:var(--font-heading);font-weight:700}
-.stream-menu__code{font-size:13px;color:var(--color-text-muted)}
-@media(max-width:520px){.card .stream-menu__item{align-items:flex-start;flex-direction:column;gap:6px}}
+.stream-select-wrap{display:grid;gap:8px;margin-top:22px}
+.stream-select-label{font-size:14px;font-weight:600;color:var(--color-navy)}
+.card .stream-select{width:100%;min-height:52px;padding:12px 16px;border:1px solid var(--color-border);border-radius:10px;background:#fff;color:var(--color-navy);font:inherit;cursor:pointer}
+.card .stream-select:focus{outline:2px solid var(--color-accent);outline-offset:2px}
 .resume-form{margin-top:28px;padding-top:22px;border-top:1px solid var(--color-border)}
 .resume-form h3{margin:0 0 8px;color:var(--color-navy)}
 .resume-form p{margin:0 0 14px;font-size:14px}
 .resume-form label{display:block;margin-bottom:7px;font-size:14px;font-weight:600}
 .resume-form__controls{display:flex;gap:10px}
 .resume-form input{flex:1;min-width:0;padding:12px;border:1px solid var(--color-border);border-radius:10px;font:inherit}
+.stream-entry-form .resume-form input{width:100%}
+.stream-entry-form>button{margin-top:20px}
 @media(max-width:520px){.resume-form__controls{flex-direction:column}}
 .bundle-menu{display:grid;gap:12px;margin-top:22px}
 .card .bundle-menu__item{display:grid;gap:9px;width:100%;padding:18px 20px;text-align:left;background:#fff;color:var(--color-navy);border:1px solid var(--color-border);border-radius:12px}
@@ -103,3 +103,25 @@ h1{font-family:var(--font-heading);font-weight:800;font-size:clamp(32px,6vw,56px
 .report-card--worsened .report-card__trend{color:var(--color-danger)}
 .report-card--stable{border-color:var(--color-border);background:#fff}
 .report-card--stable .report-card__trend{color:var(--color-text-muted)}
+
+/* ИИПБ: значение, уровень и маршрутизация каждого замера показываются вместе. */
+.iipb-measurements{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:16px;margin-top:24px}
+.iipb-measurement{padding:20px;border:1px solid var(--color-border);border-radius:12px;background:#fafbfc;min-width:0}
+.iipb-measurement h3{margin:0}
+.iipb-measurement .iipb-date{font-size:13px;margin:5px 0 14px}
+.iipb-value{font:800 56px var(--font-heading);color:var(--color-navy);line-height:1.2}
+.iipb-value span{font-size:24px;margin-left:5px}
+.iipb-meter{width:100%;height:16px;margin-top:12px;accent-color:var(--color-accent)}
+.iipb-alert{padding:14px;margin:14px 0;border:1px solid;border-radius:10px;font-size:14px;line-height:1.5}
+.iipb-alert p{margin:7px 0 0;font-size:14px;color:inherit}
+.iipb-alert--red{background:#fff0f0;color:#8d2432;border-color:#e8b6bc}
+.iipb-alert--yellow{background:#fff8e9;color:#765315;border-color:#e5ce9c}
+.iipb-measurement .iipb-flag--red{color:#8d2432;font-size:14px}
+.iipb-details{border-top:1px solid var(--color-border);padding-top:14px;margin-top:20px;font-size:14px}
+.iipb-details summary{cursor:pointer;color:var(--color-accent);line-height:1.5}
+.iipb-details dl{display:grid;grid-template-columns:1fr auto;gap:10px}
+.iipb-details dd{margin:0;font-weight:600}
+.iipb-details p{font-size:13px}
+.iipb-dynamics,.iipb-contacts{border-top:1px solid var(--color-border);margin-top:24px;padding-top:12px}
+.iipb-delta{font:700 32px var(--font-heading);color:var(--color-navy)}
+.iipb-contacts p{white-space:pre-line;overflow-wrap:anywhere}

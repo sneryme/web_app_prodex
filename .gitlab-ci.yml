@@ -1,0 +1,81 @@
+stages:
+  - test
+
+.postgres:
+  stage: test
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+  variables:
+    POSTGRES_HOST: postgres
+    POSTGRES_DB: pez_ci
+    POSTGRES_USER: pez
+    POSTGRES_PASSWORD: pez-ci
+    DJANGO_SECRET_KEY: ci-only
+
+backend:
+  extends: .postgres
+  image: python:3.12-slim
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq --no-install-recommends fonts-dejavu-core
+    - pip install -r backend/requirements.txt
+  script:
+    - cd backend
+    - python manage.py makemigrations --check --dry-run
+    - python -m pytest --junitxml=pytest.xml
+  artifacts:
+    when: always
+    reports:
+      junit: backend/pytest.xml
+
+browser:
+  extends: .postgres
+  image: node:22-bookworm
+  parallel:
+    matrix:
+      - E2E_SUITE: [iipb, legacy]
+  variables:
+    E2E_BASE_URL: http://127.0.0.1:5173
+    E2E_API_URL: http://127.0.0.1:8000/api
+    VITE_API_URL: http://127.0.0.1:8000/api
+    IIPB_DEMO_STAFF_PASSWORD: demo-ci-local
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq --no-install-recommends python3-venv fonts-dejavu-core curl
+    - python3 -m venv .ci-venv
+    - . .ci-venv/bin/activate
+    - pip install -r backend/requirements.txt
+    - npm --prefix frontend ci
+    - npm --prefix e2e ci
+    - cd e2e && npx playwright install --with-deps chromium && cd ..
+  script:
+    - npm --prefix frontend run build
+    - npm --prefix e2e run typecheck
+    - python backend/manage.py migrate --noinput
+    - |
+      if [ "$E2E_SUITE" = iipb ]; then
+        python backend/manage.py seed_iipb_methodology
+        python backend/manage.py seed_iipb_demo
+        export E2E_ENTRY_CODE=iipb-presentation
+        E2E_TEST_PARTICIPANT_TOKEN="$(python backend/manage.py create_test_participant --organization-code "$E2E_ENTRY_CODE" | sed -n 's/^Код участника: //p')"
+        test -n "$E2E_TEST_PARTICIPANT_TOKEN"
+        export E2E_TEST_PARTICIPANT_TOKEN
+      else
+        python backend/manage.py seed_demo_organization
+        python backend/manage.py seed_real_questionnaires
+        python backend/manage.py seed_dummy_questionnaire
+        python backend/manage.py seed_employer_demo_streams --bundle prodex-v1
+        python backend/manage.py seed_demo_staff >/dev/null
+        python backend/manage.py seed_demo_licenses
+      fi
+    - python backend/manage.py runserver 127.0.0.1:8000 --noreload > backend-ci.log 2>&1 &
+    - npm --prefix frontend run dev -- --host 127.0.0.1 --strictPort > frontend-ci.log 2>&1 &
+    - curl -fsS --retry 30 --retry-connrefused --retry-delay 1 "$E2E_API_URL/health/" >/dev/null
+    - curl -fsS --retry 30 --retry-connrefused --retry-delay 1 "$E2E_BASE_URL/" >/dev/null
+    - npm --prefix e2e test
+  artifacts:
+    when: always
+    paths:
+      - e2e/playwright-report/
+      - frontend-ci.log

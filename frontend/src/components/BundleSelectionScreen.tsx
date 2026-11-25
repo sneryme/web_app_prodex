@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ApiError } from "../api";
 import type { ParticipantHomeState } from "../types";
-import { TokenBadge } from "./TokenBadge";
 
 interface Props {
   home: ParticipantHomeState;
@@ -33,6 +32,7 @@ export function BundleSelectionScreen({ home, onSelect }: Props) {
     <section className="card">
       <span className="tag">{"\u0423\u0447\u0430\u0441\u0442\u0438\u0435 \u0432 \u043f\u0440\u043e\u0433\u0440\u0430\u043c\u043c\u0435"}</span>
       <h2>{"\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442 \u0442\u0435\u0441\u0442\u043e\u0432"}</h2>
+      {home.is_test && <p><strong>Тестовый участник.</strong> Итоговое тестирование доступно без ожидания 7 дней.</p>}
       {home.bundles.length ? (
         <div className="bundle-menu">
           {home.bundles.map((bundle) => (
@@ -75,7 +75,6 @@ export function BundleSelectionScreen({ home, onSelect }: Props) {
         <p>{"\u0414\u043b\u044f \u0432\u0430\u0448\u0435\u0439 \u043e\u0440\u0433\u0430\u043d\u0438\u0437\u0430\u0446\u0438\u0438 \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0445 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u043e\u0432. \u041e\u0431\u0440\u0430\u0442\u0438\u0442\u0435\u0441\u044c \u043a \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u0443."}</p>
       )}
       {error && <p className="error-banner" role="alert">{error}</p>}
-      <TokenBadge token={home.token} />
     </section>
   );
 }

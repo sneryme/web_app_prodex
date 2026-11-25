@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { sendConsent } from "../api";
 import type { SessionState } from "../types";
-import { TokenBadge } from "./TokenBadge";
 
 // Черновая версия текста согласия — заменить после утверждения юристом (см. project/DATA_PROTECTION.md).
 const CONSENT_TEXT_VERSION = "v1";
@@ -14,6 +13,10 @@ interface Props {
 /** ТЗ FR-03: отдельный экран согласия/информирования; чекбокс по умолчанию не отмечен. */
 export function ConsentScreen({ session, onResult }: Props) {
   const [checked, setChecked] = useState(false);
+  const [informed, setInformed] = useState(false);
+  const [adult, setAdult] = useState(false);
+  const isIIPB = session.methodology === "iipb-0.1";
+  const textVersion = isIIPB ? session.methodology! : CONSENT_TEXT_VERSION;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,13 +26,13 @@ export function ConsentScreen({ session, onResult }: Props) {
     try {
       await sendConsent(session.token, {
         consent_type: "informed_notice",
-        text_version: CONSENT_TEXT_VERSION,
+        text_version: textVersion,
         accepted: true,
         bundle_id: session.bundle_id ?? 0,
       });
       const updated = await sendConsent(session.token, {
         consent_type: "data_processing",
-        text_version: CONSENT_TEXT_VERSION,
+        text_version: textVersion,
         accepted: true,
         bundle_id: session.bundle_id ?? 0,
       });
@@ -46,7 +49,7 @@ export function ConsentScreen({ session, onResult }: Props) {
     try {
       const updated = await sendConsent(session.token, {
         consent_type: "data_processing",
-        text_version: CONSENT_TEXT_VERSION,
+        text_version: textVersion,
         accepted: false,
         bundle_id: session.bundle_id ?? 0,
       });
@@ -65,20 +68,24 @@ export function ConsentScreen({ session, onResult }: Props) {
         Тестирование включает опросники EQ-5D, Спилбергера–Ханина и HADS. Результат видите только вы;
         работодатель получает обезличенную групповую статистику без вашего личного результата.
       </p>
+      {isIIPB && <>
+        <p>ИИПБ v0.1 объединяет результаты HADS, Спилбергера–Ханина и EQ-5D-5L. Это предварительная, не валидированная методика. Результат не является диагнозом и не применяется для кадровых решений. При выраженных трудностях будет предложено обратиться к специалисту.</p>
+        <label className="consent-checkbox"><input type="checkbox" checked={adult} onChange={event => setAdult(event.target.checked)} />Мне исполнилось 18 лет; я могу самостоятельно заполнить опросники.</label>
+        <label className="consent-checkbox"><input type="checkbox" checked={informed} onChange={event => setInformed(event.target.checked)} />Я ознакомлен(а) с целью, ограничениями ИИПБ и добровольным характером участия.</label>
+      </>}
       <label className="consent-checkbox">
         <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
-        Я согласен(на) на обработку персональных данных в рамках тестирования
+        Я согласен(на) на обработку {isIIPB ? "сведений о состоянии здоровья и ответов на опросники" : "персональных данных"} в рамках тестирования
       </label>
       {error && <p className="error-banner">{error}</p>}
       <div className="actions">
-        <button type="button" disabled={!checked || busy} onClick={accept}>
+        <button type="button" disabled={!checked || (isIIPB && (!adult || !informed)) || busy} onClick={accept}>
           Продолжить
         </button>
         <button type="button" className="ghost" disabled={busy} onClick={decline}>
           Отказаться от участия
         </button>
       </div>
-      <TokenBadge token={session.token} />
     </section>
   );
 }

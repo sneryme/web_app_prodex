@@ -50,6 +50,26 @@ def list_entry_streams(request):
     return Response([{"id": stream.id, "code": stream.code, "name": stream.name or stream.code} for stream in streams])
 
 
+@api_view(["POST"])
+def participant_entry(request):
+    """Возвращает контекст корпоративной ссылки, чтобы не перепутать её с сохранённой сессией."""
+    serializer = ListStreamsSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    try:
+        organization, streams = services.entry_context_for_code(serializer.validated_data["entry_code"])
+    except services.EntryCodeInvalid:
+        return Response({"detail": "Ссылка недействительна."}, status=status.HTTP_404_NOT_FOUND)
+    return Response(
+        {
+            "organization_id": organization.pk,
+            "streams": [
+                {"id": stream.id, "code": stream.code, "name": stream.name or stream.code}
+                for stream in streams
+            ],
+        }
+    )
+
+
 @api_view(["GET"])
 def session_detail(request, token):
     """FR-01.3/FR-04: состояние сессии — по нему фронтенд решает, какой экран показать."""
@@ -83,13 +103,14 @@ def session_consent(request, token):
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data.copy()
     bundle_id = data.pop("bundle_id", None)
-    services.record_consent(participant_token, **data)
     if bundle_id is None:
+        services.record_consent(participant_token, **data)
         return Response(services.session_state(participant_token), status=status.HTTP_201_CREATED)
     try:
         bundle = services.get_bundle_for_token(participant_token, bundle_id)
     except services.BundleUnavailable:
         return Response({"detail": "Selected test bundle is unavailable."}, status=status.HTTP_404_NOT_FOUND)
+    services.record_consent(participant_token, **data)
     return Response(services.session_state(participant_token, bundle), status=status.HTTP_201_CREATED)
 
 
@@ -110,6 +131,7 @@ def session_answer(request, token):
             option_id=serializer.validated_data["option_id"],
             raw_value=serializer.validated_data["raw_value"],
             bundle=bundle,
+            stage=serializer.validated_data["stage"],
         )
     except services.ConsentRequired:
         return Response(
@@ -118,6 +140,26 @@ def session_answer(request, token):
     except services.NoActiveStage:
         return Response(
             {"detail": "Активный этап тестирования не найден."}, status=status.HTTP_409_CONFLICT
+        )
+    except services.StageMismatch:
+        return Response(
+            {"detail": "Этап изменился. Обновите страницу, чтобы продолжить.", "code": "stage_mismatch"},
+            status=status.HTTP_409_CONFLICT,
+        )
+    except services.QuestionnaireComplete:
+        return Response(
+            {"detail": "\u042d\u0442\u043e\u0442 \u0442\u0435\u0441\u0442 \u0443\u0436\u0435 \u043f\u0440\u043e\u0439\u0434\u0435\u043d. \u041e\u0442\u0432\u0435\u0442\u044b \u0437\u0430\u043a\u0440\u044b\u0442\u044b \u0434\u043b\u044f \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f."},
+            status=status.HTTP_409_CONFLICT,
+        )
+    except services.FollowupTooEarly:
+        return Response(
+            {"detail": "Итоговое тестирование доступно не раньше чем через 7 дней после входного замера."},
+            status=status.HTTP_409_CONFLICT,
+        )
+    except services.QuestionnaireOrderRequired:
+        return Response(
+            {"detail": "Ответьте на предыдущий вопрос. Порядок: HADS → СТ → ЛТ → EQ-5D-5L."},
+            status=status.HTTP_409_CONFLICT,
         )
     except services.UnknownQuestion:
         return Response(
@@ -143,11 +185,13 @@ def session_report(request, token):
         bundle = services.get_bundle_for_token(participant_token, int(bundle_id)) if bundle_id else None
     except (services.BundleUnavailable, ValueError):
         return Response({"detail": "Test bundle not found."}, status=status.HTTP_404_NOT_FOUND)
+    if services.is_iipb(bundle) and services.consent_status(participant_token, bundle) != "granted":
+        return Response({"detail": "Нужно согласие на обработку данных."}, status=status.HTTP_403_FORBIDDEN)
     try:
         report = build_personal_report(participant_token, bundle=bundle)
     except ReportNotReady:
         return Response(
-            {"detail": "Отчёт появится после завершения обоих этапов тестирования."},
+            {"detail": "Результат появится после полного входного замера." if services.is_iipb(bundle) else "Отчёт появится после завершения обоих этапов тестирования."},
             status=status.HTTP_404_NOT_FOUND,
         )
     return Response(report)

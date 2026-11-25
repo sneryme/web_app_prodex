@@ -1,5 +1,5 @@
 import { ApiError, request } from "../httpClient";
-import type { BundleSummary, LoginResponse, OrganizationOverview, OrganizationSummary, StreamSummary } from "./types";
+import type { BundleSummary, ComparisonResult, LoginResponse, OrganizationOverview, OrganizationSummary, StreamSummary } from "./types";
 
 const TOKEN_KEY = "pez_employer_token";
 const STAFF_KEY = "pez_employer_staff";
@@ -70,12 +70,23 @@ export function getOverview(organizationId: number, streamId: number | null, bun
   });
 }
 
-// Бинарный ответ (PDF/XLSX) — не JSON, поэтому не через общий request(), а напрямую через fetch.
+export function getComparison(
+  organizationId: number,
+  bundleId: number | null,
+  params: URLSearchParams,
+): Promise<ComparisonResult> {
+  if (bundleId !== null) params.set("bundle", String(bundleId));
+  return request<ComparisonResult>(`/employer/organizations/${organizationId}/compare/?${params}`, {
+    headers: authHeaders(),
+  });
+}
+
+// Бинарный ответ (PDF/XLSX/CSV) — не JSON, поэтому не через общий request(), а напрямую через fetch.
 export async function downloadExport(
   organizationId: number,
   streamId: number | null,
   bundleId: number | null,
-  format: "pdf" | "xlsx",
+  format: "pdf" | "xlsx" | "csv",
 ): Promise<void> {
   // "kind", не "format": "format" у DRF зарезервирован под собственное content negotiation.
   const params = new URLSearchParams({ kind: format });

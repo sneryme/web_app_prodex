@@ -1,24 +1,46 @@
-# Test bundle end-to-end scenario
+# Playwright для ИИПБ и исторических комплектов
 
-The bundle-flow browser test uses the demo organization and two seeded bundles. Start the app and prepare the demo data from the repository root:
+GitLab CI запускает оба набора в отдельных заданиях, каждое со своей PostgreSQL.
+Для локального запуска установите зависимости в каталоге `e2e`.
 
 ```powershell
-docker compose up --build -d
+npm ci
+npx playwright install chromium
+```
+
+## ИИПБ
+
+Подготовьте демонстрационный стенд по [основному README](../README.md).
+В PowerShell, из которого запускается Playwright, установите пароль кабинета
+работодателя и код тестового участника, выведенные командой `seed_iipb_demo --test-participant`.
+
+```powershell
+$env:E2E_SUITE = 'iipb'
+$env:IIPB_DEMO_STAFF_PASSWORD = '<пароль демо>'
+$env:E2E_TEST_PARTICIPANT_TOKEN = '<код участника>'
+npm test
+```
+
+## Исторические комплекты
+
+На отдельном тестовом стенде с чистой базой выполните следующие команды в папке
+с `docker-compose.yml`.
+
+```powershell
 docker compose exec backend python manage.py seed_demo_organization
 docker compose exec backend python manage.py seed_real_questionnaires
 docker compose exec backend python manage.py seed_dummy_questionnaire
+docker compose exec backend python manage.py seed_employer_demo_streams --bundle prodex-v1
+docker compose exec backend python manage.py seed_demo_staff
+docker compose exec backend python manage.py seed_demo_licenses
 ```
 
-Run the scenario from `e2e`:
+Из каталога `e2e` запустите исторический набор.
 
 ```powershell
-npm run test:bundle-flow
+$env:E2E_SUITE = 'legacy'
+npm test
 ```
 
-The scenario selects `dummy-bundle`, saves an answer, reloads and resumes, completes both stages, checks the completed state and report, verifies that a retake is rejected, then starts `prodex-v1` and checks that its progress and report state remain independent.
-
-The backend tests create their own organizations, questionnaire versions, and bundles, so they do not need seeded database rows. Run the bundle-flow test in the backend container from the repository root:
-
-```powershell
-docker compose exec backend python -m pytest apps/participants/test_bundle_flow.py -q
-```
+`npm run test:bundle-flow` в этом режиме запускает только сценарий FR-13.
+Если порты тестового стенда отличаются, задайте `E2E_BASE_URL` и `E2E_API_URL`.

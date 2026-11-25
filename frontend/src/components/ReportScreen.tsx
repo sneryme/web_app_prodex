@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getReport } from "../api";
 import type { PersonalReport } from "../types";
 import { ReportPendingScreen } from "./ReportPendingScreen";
+import { IIPBSummary } from "./IIPBSummary";
 
 const TREND_LABEL: Record<string, string> = {
   improved: "улучшение",
@@ -44,7 +45,7 @@ export function ReportScreen({ token, bundleId, onBackToBundles }: Props) {
         <h2>Секунду…</h2>
         <p>Считаем ваш результат.</p>
         <button type="button" className="ghost" onClick={onBackToBundles}>
-          {"\u0412 \u0433\u043b\u0430\u0432\u043d\u043e\u0435 \u043c\u0435\u043d\u044e \u043a \u0432\u044b\u0431\u043e\u0440\u0443 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u043e\u0432"}
+          В главное меню
         </button>
       </section>
     );
@@ -56,7 +57,8 @@ export function ReportScreen({ token, bundleId, onBackToBundles }: Props) {
 
   return (
     <>
-      <section className="card">
+      {report.is_test && <section className="card"><p><strong>Тестовый отчёт.</strong> Эти результаты не входят в групповую статистику.</p></section>}
+      {report.iipb ? <IIPBSummary {...report.iipb} contacts={report.routing_contacts} /> : <section className="card">
         <span className="tag">Ваши результаты после курса</span>
         <h2>
           {report.improved_count > 0
@@ -64,9 +66,9 @@ export function ReportScreen({ token, bundleId, onBackToBundles }: Props) {
             : "Результаты после курса"}
         </h2>
         <p>{report.summary}</p>
-      </section>
+      </section>}
 
-      <section className="card">
+      {report.cards.length > 0 && <section className="card">
         <h2>Динамика по показателям</h2>
         <div className="report-grid">
           {report.cards.map((card) => (
@@ -77,19 +79,19 @@ export function ReportScreen({ token, bundleId, onBackToBundles }: Props) {
                 <span className="report-card__arrow">→</span>
                 <span>{card.after.raw_score}</span>
               </div>
-              <p className="report-card__zones">
+              {(card.before.zone || card.after.zone) && <p className="report-card__zones">
                 {card.before.zone} → {card.after.zone}
-              </p>
+              </p>}
               <p className="report-card__trend">{TREND_LABEL[card.trend] ?? card.trend}</p>
             </article>
           ))}
         </div>
-      </section>
+      </section>}
 
       {report.eq5d_profile.length > 0 && (
         <section className="card">
           <h2>Ваш профиль здоровья (EQ-5D)</h2>
-          <p>Дополнительные измерения EQ-5D — не входят в 5 основных показателей выше.</p>
+          <p>{report.iipb ? "Уровни пяти измерений EQ-5D-5L (от 1 до 5). Их сумма входит в домен самочувствия / здоровья." : "Дополнительные измерения EQ-5D."}</p>
           <ul className="facts">
             {report.eq5d_profile.map((item) => (
               <li key={item.indicator_code}>
@@ -101,7 +103,7 @@ export function ReportScreen({ token, bundleId, onBackToBundles }: Props) {
       )}
       <section className="card">
         <button type="button" className="ghost" onClick={onBackToBundles}>
-          {"\u0412 \u0433\u043b\u0430\u0432\u043d\u043e\u0435 \u043c\u0435\u043d\u044e \u043a \u0432\u044b\u0431\u043e\u0440\u0443 \u043a\u043e\u043c\u043f\u043b\u0435\u043a\u0442\u043e\u0432"}
+          В главное меню
         </button>
       </section>
     </>

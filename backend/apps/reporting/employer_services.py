@@ -21,19 +21,21 @@ from apps.assessments.models import AnswerResponse, ScoringResult, TestBundle
 from apps.assessments.scoring import REPORT_INDICATOR_LABELS, REPORT_INDICATORS, trend_for
 from apps.organizations.models import Stream
 from apps.participants.models import ParticipantToken
+from apps.assessments.iipb_services import is_iipb
+from .iipb_services import iipb_overview
 
 DEFAULT_GROUP_THRESHOLD = 5
 
 
 def list_streams(organization) -> list[dict]:
-    streams = Stream.objects.filter(organization=organization).order_by("code")
+    streams = Stream.objects.filter(organization=organization).order_by("name", "pk")
     return [
         {
             "id": stream.id,
             "code": stream.code,
             "name": stream.name,
             "status": stream.status,
-            "participant_count": ParticipantToken.objects.filter(stream=stream).count(),
+            "participant_count": ParticipantToken.objects.filter(stream=stream, is_test=False).count(),
         }
         for stream in streams
     ]
@@ -42,7 +44,7 @@ def list_streams(organization) -> list[dict]:
 def list_bundles(organization) -> list[dict]:
     return [
         {"id": bundle.id, "code": bundle.code, "name": bundle.name}
-        for bundle in organization.test_bundles.order_by("name", "id")
+        for bundle in organization.test_bundles.order_by("-methodology", "name", "id")
     ]
 
 
@@ -54,9 +56,11 @@ def _published_results(tokens, bundle=None, **filters):
     один и тот же код показателя. Среднее по такой смеси не значит ничего. Строки с пустой версией
     (исторические, чьи ответы уже удалены) тоже исключаются — их шкалу подтвердить нечем.
     """
-    results = ScoringResult.objects.filter(token__in=tokens, questionnaire_version__is_active=True, **filters)
+    results = ScoringResult.objects.filter(token__in=tokens, token__is_test=False, **filters)
     if bundle is not None:
-        results = results.filter(bundle=bundle)
+        results = results.filter(bundle=bundle, questionnaire_version__bundle_items__bundle=bundle)
+    else:
+        results = results.filter(bundle__isnull=True, questionnaire_version__is_active=True)
     return results
 
 
@@ -105,20 +109,26 @@ def _trend_block(indicator_code: str, tokens, threshold: int, bundle=None) -> di
 def organization_overview(organization, stream=None, bundle=None) -> dict:
     """Один вызов — весь дашборд: охват, completion, 5 показателей с распределением «вход/итог»."""
     if bundle is None:
-        bundle = organization.test_bundles.order_by("name", "id").first()
+        bundle = organization.test_bundles.order_by("-methodology", "name", "id").first()
     tokens = ParticipantToken.objects.filter(organization=organization)
     if stream is not None:
         tokens = tokens.filter(stream=stream)
+    threshold = stream.min_group_size if stream is not None else DEFAULT_GROUP_THRESHOLD
+    if is_iipb(bundle):
+        threshold = max(5, threshold)
+    return _overview_for_tokens(organization, tokens, bundle, stream, threshold)
+
+
+def _overview_for_tokens(organization, tokens, bundle, stream, threshold: int) -> dict:
+    tokens = tokens.filter(is_test=False)
     total_questions = 0
     if bundle is not None:
         total_questions = sum(
-            item.questionnaire_version.questions.filter(questionnaire_version__is_active=True).count()
+            item.questionnaire_version.questions.count()
             for item in bundle.items.all()
         )
         token_ids = AnswerResponse.objects.filter(bundle=bundle, token__in=tokens).values_list("token_id", flat=True).distinct()
         tokens = tokens.filter(pk__in=token_ids)
-
-    threshold = stream.min_group_size if stream is not None else DEFAULT_GROUP_THRESHOLD
 
     indicators = [
         {
@@ -129,6 +139,7 @@ def organization_overview(organization, stream=None, bundle=None) -> dict:
             "trend": _trend_block(code, tokens, threshold, bundle=bundle),
         }
         for code in REPORT_INDICATORS
+        if not is_iipb(bundle) or code != "trait_anxiety"
     ]
 
     return {
@@ -141,7 +152,50 @@ def organization_overview(organization, stream=None, bundle=None) -> dict:
             "followup_completed": _completed_bundle_stage(tokens, bundle, "followup", total_questions),
         },
         "indicators": indicators,
+        "iipb": iipb_overview(tokens, bundle, threshold) if is_iipb(bundle) else None,
     }
+
+
+def compare_streams(organization, stream_ids: list[int], bundle=None) -> list[dict]:
+    """Сравнивает 2–4 потока, применяя индивидуальный порог публикации каждого потока."""
+    if bundle is None:
+        bundle = organization.test_bundles.order_by("-methodology", "name", "id").first()
+    streams = list(Stream.objects.filter(organization=organization, pk__in=stream_ids).order_by("name", "pk"))
+    if len(streams) != len(set(stream_ids)):
+        raise ValueError("One or more streams do not belong to this organization.")
+    return [
+        {
+            "key": f"stream-{stream.pk}",
+            "label": stream.name or f"Поток {stream.pk}",
+            "threshold": max(5, stream.min_group_size) if is_iipb(bundle) else stream.min_group_size,
+            "overview": organization_overview(organization, stream=stream, bundle=bundle),
+        }
+        for stream in streams
+    ]
+
+
+def compare_periods(organization, period_ranges: list[dict], bundle=None) -> list[dict]:
+    """Сравнивает непересекающиеся когорты по дате создания сессии участника."""
+    if bundle is None:
+        bundle = organization.test_bundles.order_by("-methodology", "name", "id").first()
+    groups = []
+    for index, period in enumerate(period_ranges, start=1):
+        tokens = ParticipantToken.objects.filter(
+            organization=organization,
+            created_at__date__gte=period["from"],
+            created_at__date__lte=period["to"],
+        )
+        groups.append(
+            {
+                "key": f"period-{index}",
+                "label": period["label"],
+                "date_from": period["from"].isoformat(),
+                "date_to": period["to"].isoformat(),
+                "threshold": DEFAULT_GROUP_THRESHOLD,
+                "overview": _overview_for_tokens(organization, tokens, bundle, None, DEFAULT_GROUP_THRESHOLD),
+            }
+        )
+    return groups
 
 
 def _completed_bundle_stage(tokens, bundle, stage: str, total_questions: int) -> int:

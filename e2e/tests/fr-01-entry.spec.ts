@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { DEMO_ENTRY_CODE, enterViaCorporateLink, resumeBundle } from "./support/participant";
+import { DEMO_ENTRY_CODE, enterViaCorporateLink, openTokenNotice, readParticipantToken, resumeBundle } from "./support/participant";
 
 const API_URL = process.env.E2E_API_URL ?? "http://localhost:8000/api";
 
@@ -7,25 +7,26 @@ test.describe("FR-01 Вход участника по QR/ссылке, созд�
   test("FR-01.1 переход по корпоративной ссылке создаёт сессию и выдаёт участнику токен", async ({ page }) => {
     await enterViaCorporateLink(page);
     await expect(page.getByRole("heading", { name: "Добро пожаловать" })).toBeVisible();
-    // Токен создан и сохранён в localStorage — это то, чем система связывает вход и итог (ТЗ п.3).
-    const token = await page.evaluate(() => window.localStorage.getItem("pez_participant_token"));
+    const token = await readParticipantToken(page);
     expect(token).toBeTruthy();
   });
 
   test("FR-01.2 участник может увидеть и сохранить свой токен (код/QR)", async ({ page }) => {
-    await enterViaCorporateLink(page);
-    const token = await page.evaluate(() => window.localStorage.getItem("pez_participant_token"));
+    await openTokenNotice(page);
+    const token = await readParticipantToken(page);
+    expect(token).toBeTruthy();
     await expect(page.locator(".token-box code")).toHaveText(token ?? "");
   });
 
   test("FR-01.3 повторное открытие ссылки с сохранённым токеном продолжает прежнюю сессию", async ({ page }) => {
     await enterViaCorporateLink(page);
-    const token = await page.evaluate(() => window.localStorage.getItem("pez_participant_token"));
+    const token = await readParticipantToken(page);
+    expect(token).toBeTruthy();
 
     await page.reload();
     await resumeBundle(page);
     await expect(page.getByRole("heading", { name: "Добро пожаловать" })).toBeVisible();
-    const tokenAfterReload = await page.evaluate(() => window.localStorage.getItem("pez_participant_token"));
+    const tokenAfterReload = await readParticipantToken(page);
     expect(tokenAfterReload).toBe(token);
   });
 
@@ -33,7 +34,7 @@ test.describe("FR-01 Вход участника по QR/ссылке, созд�
     // Не используем enterViaCorporateLink — он ждёт экран Welcome, а здесь код заведомо невалиден.
     await page.goto("/?code=does-not-exist");
     await expect(page.getByRole("heading", { name: "Ссылка недействительна или отключена" })).toBeVisible();
-    const token = await page.evaluate(() => window.localStorage.getItem("pez_participant_token"));
+    const token = await readParticipantToken(page);
     expect(token).toBeNull();
   });
 

@@ -7,11 +7,19 @@ def generate_entry_code():
     return secrets.token_urlsafe(8)
 
 
+def generate_stream_code():
+    """Generate a short opaque code used internally to identify a stream."""
+    return secrets.token_urlsafe(6)
+
+
 class Organization(models.Model):
     """Юридическое лицо-клиент PRODEX (ТЗ: единица лицензирования Digital)."""
 
     name = models.CharField("Название", max_length=255)
     legal_name = models.CharField("Юридическое название", max_length=255, blank=True)
+    is_demo = models.BooleanField("Демоорганизация", default=False)
+    specialist_contact = models.TextField("Контакт специалиста для маршрутизации", blank=True)
+    physician_contact = models.TextField("Контакт терапевта для маршрутизации", blank=True)
     test_bundles = models.ManyToManyField(
         "assessments.TestBundle",
         blank=True,
@@ -75,7 +83,7 @@ class Stream(models.Model):
     ]
 
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="streams", verbose_name="Организация")
-    code = models.CharField("Код", max_length=64)
+    code = models.CharField("Код", max_length=64, blank=True)
     name = models.CharField("Название", max_length=255, blank=True)
     status = models.CharField("Статус", max_length=16, choices=STATUS_CHOICES, default=STATUS_PLANNED)
     planned_start = models.DateField("Плановое начало", null=True, blank=True)
@@ -95,5 +103,17 @@ class Stream(models.Model):
         verbose_name = "Поток"
         verbose_name_plural = "Потоки"
 
+    def save(self, *args, **kwargs):
+        if not self.code:
+            while True:
+                code = generate_stream_code()
+                if not Stream.objects.filter(organization_id=self.organization_id, code=code).exists():
+                    self.code = code
+                    break
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.organization.name} / {self.code}"
+        label = self.name
+        if not label:
+            label = f"Поток {self.pk}" if self.pk else "Новый поток"
+        return f"{self.organization.name} / {label}"

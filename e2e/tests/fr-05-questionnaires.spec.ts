@@ -16,10 +16,11 @@ test.describe("FR-05 Три методики: EQ-5D, Спилбергер–Ха
   }) => {
     const created = await request.post(`${API_URL}/participant/sessions/`, { data: { entry_code: DEMO_ENTRY_CODE } });
     const { token } = await created.json();
-    await request.post(`${API_URL}/participant/sessions/${token}/consents/`, {
+    const consent = await request.post(`${API_URL}/participant/sessions/${token}/consents/`, {
       data: { consent_type: "data_processing", text_version: "v1", accepted: true },
     });
-    const state = await (await request.get(`${API_URL}/participant/sessions/${token}/`)).json();
+    expect(consent.status()).toBe(201);
+    const state = await consent.json();
 
     const counts: Record<string, number> = {};
     for (const q of state.questions) counts[q.indicator_code] = (counts[q.indicator_code] ?? 0) + 1;

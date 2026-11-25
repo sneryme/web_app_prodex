@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -71,7 +73,7 @@ def _resolve_stream(organization, request):
 def _resolve_bundle(organization, request):
     bundle_id = request.query_params.get("bundle")
     if not bundle_id:
-        return organization.test_bundles.order_by("name", "id").first(), None
+        return organization.test_bundles.order_by("-methodology", "name", "id").first(), None
     try:
         return organization.test_bundles.get(pk=bundle_id), None
     except (TestBundle.DoesNotExist, ValueError):
@@ -95,6 +97,58 @@ def organization_overview(request, organization_id):
         return error
 
     return Response(employer_services.organization_overview(organization, stream=stream, bundle=bundle))
+
+
+@api_view(["GET"])
+@permission_classes([IsStaffMember])
+def organization_compare(request, organization_id):
+    """Сравнение потоков или двух периодов с теми же правилами подавления агрегатов."""
+    organization, error = _get_organization_or_404(request, organization_id)
+    if error is not None:
+        return error
+
+    bundle, error = _resolve_bundle(organization, request)
+    if error is not None:
+        return error
+
+    mode = request.query_params.get("mode")
+    if mode == "streams":
+        try:
+            stream_ids = [int(value) for value in request.query_params.get("streams", "").split(",") if value]
+        except ValueError:
+            return Response({"detail": "Параметр streams должен содержать ID потоков."}, status=status.HTTP_400_BAD_REQUEST)
+        if not 2 <= len(stream_ids) <= 4 or len(stream_ids) != len(set(stream_ids)):
+            return Response({"detail": "Выберите от 2 до 4 разных потоков."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            groups = employer_services.compare_streams(organization, stream_ids, bundle=bundle)
+        except ValueError:
+            return Response({"detail": "Один или несколько потоков не принадлежат организации."}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"mode": mode, "groups": groups})
+
+    if mode == "periods":
+        raw_periods = [
+            ("Первый период", "period_a_from", "period_a_to"),
+            ("Второй период", "period_b_from", "period_b_to"),
+        ]
+        periods = []
+        try:
+            for label, from_key, to_key in raw_periods:
+                start = date.fromisoformat(request.query_params[from_key])
+                end = date.fromisoformat(request.query_params[to_key])
+                if start > end:
+                    raise ValueError
+                periods.append({"label": label, "from": start, "to": end})
+        except (KeyError, TypeError, ValueError):
+            return Response({"detail": "Укажите корректные даты начала и окончания обоих периодов."}, status=status.HTTP_400_BAD_REQUEST)
+
+        first, second = periods
+        if not (first["to"] < second["from"] or second["to"] < first["from"]):
+            return Response({"detail": "Сравниваемые периоды не должны пересекаться."}, status=status.HTTP_400_BAD_REQUEST)
+        first["label"] = f"{first['from'].isoformat()} — {first['to'].isoformat()}"
+        second["label"] = f"{second['from'].isoformat()} — {second['to'].isoformat()}"
+        return Response({"mode": mode, "groups": employer_services.compare_periods(organization, periods, bundle=bundle)})
+
+    return Response({"detail": "Параметр mode должен быть streams или periods."}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(["GET"])
@@ -130,9 +184,13 @@ def organization_export(request, organization_id):
         body = export_services.build_xlsx(overview)
         content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         filename = f"dashboard-{name_part}.xlsx"
+    elif fmt == "csv":
+        body = export_services.build_csv(overview)
+        content_type = "text/csv; charset=utf-8"
+        filename = f"dashboard-{name_part}.csv"
     else:
         return Response(
-            {"detail": "Неизвестный формат экспорта, допустимо: pdf, xlsx (параметр kind)."},
+            {"detail": "Неизвестный формат экспорта, допустимо: pdf, xlsx, csv (параметр kind)."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 

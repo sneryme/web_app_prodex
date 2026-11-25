@@ -39,8 +39,8 @@ test.describe("FR-06 Один вопрос на экран, прогресс, а
     await expect(page.locator(".option-card.selected")).toHaveCount(1);
   });
 
-  test("FR-06.4 после закрытия браузера участник продолжает с того же места по токену", async ({ browser }) => {
-    const context = await browser.newContext();
+  test("FR-06.4 после закрытия браузера участник продолжает с того же места по токену", async ({ browser, baseURL }) => {
+    const context = await browser.newContext({ baseURL });
     const page = await context.newPage();
     await startTesting(page);
     await answerCurrentQuestion(page);
@@ -48,8 +48,8 @@ test.describe("FR-06 Один вопрос на экран, прогресс, а
     const storageState = await context.storageState();
     await context.close();
 
-    // Новый контекст = новый «браузер» с тем же localStorage — эмулируем закрытие и повторное открытие.
-    const reopenedContext = await browser.newContext({ storageState });
+    // Переносим cookie в новый контекст, как при повторном открытии браузера.
+    const reopenedContext = await browser.newContext({ baseURL, storageState });
     const reopenedPage = await reopenedContext.newPage();
     await reopenedPage.goto("/");
     await resumeBundle(reopenedPage);

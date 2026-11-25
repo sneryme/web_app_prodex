@@ -4,7 +4,7 @@ from django.db import IntegrityError
 from apps.organizations.models import Organization
 from apps.participants.models import ParticipantToken
 
-from .models import AnswerOption, AnswerResponse, Question, QuestionnaireVersion, ScoringResult
+from .models import AnswerOption, AnswerResponse, Question, QuestionnaireVersion, ScoringResult, TestBundle
 
 
 @pytest.mark.django_db
@@ -38,6 +38,7 @@ def test_answer_response_is_idempotent_per_token_stage_question():
 def test_scoring_result_is_unique_per_token_stage_indicator():
     org = Organization.objects.create(name="ООО Ромашка")
     token = ParticipantToken.objects.create(organization=org)
-    ScoringResult.objects.create(token=token, stage="baseline", indicator_code="hads_anxiety", raw_score=14)
+    bundle = TestBundle.objects.create(code="test-bundle", name="Тестовый комплект")
+    ScoringResult.objects.create(token=token, bundle=bundle, stage="baseline", indicator_code="hads_anxiety", raw_score=14)
     with pytest.raises(IntegrityError):
-        ScoringResult.objects.create(token=token, stage="baseline", indicator_code="hads_anxiety", raw_score=10)
+        ScoringResult.objects.create(token=token, bundle=bundle, stage="baseline", indicator_code="hads_anxiety", raw_score=10)

@@ -29,27 +29,27 @@ def token(db, numeric_question):
 
 @pytest.mark.django_db
 def test_free_numeric_answer_is_saved_as_raw_value(token, numeric_question):
-    state = submit_answer(token, question_id=numeric_question.id, option_id=None, raw_value="72")
+    state = submit_answer(token, question_id=numeric_question.id, option_id=None, raw_value="72", stage="baseline")
     assert state["questions"][0]["answer"] == {"option_id": None, "raw_value": "72"}
 
 
 @pytest.mark.django_db
 def test_free_numeric_answer_rejects_out_of_range_value(token, numeric_question):
     with pytest.raises(InvalidAnswerValue):
-        submit_answer(token, question_id=numeric_question.id, option_id=None, raw_value="150")
+        submit_answer(token, question_id=numeric_question.id, option_id=None, raw_value="150", stage="baseline")
 
 
 @pytest.mark.django_db
 def test_free_numeric_answer_rejects_non_numeric_value(token, numeric_question):
     with pytest.raises(InvalidAnswerValue):
-        submit_answer(token, question_id=numeric_question.id, option_id=None, raw_value="много")
+        submit_answer(token, question_id=numeric_question.id, option_id=None, raw_value="много", stage="baseline")
 
 
 @pytest.mark.django_db
 def test_free_numeric_question_rejects_an_option_id(token, numeric_question):
     # У вопроса нет вариантов ответа — option_id здесь всегда не относится к нему.
     with pytest.raises(UnknownQuestion):
-        submit_answer(token, question_id=numeric_question.id, option_id=999, raw_value="")
+        submit_answer(token, question_id=numeric_question.id, option_id=999, raw_value="", stage="baseline")
 
 
 @pytest.mark.django_db
@@ -62,4 +62,4 @@ def test_option_based_question_requires_an_option_id(db):
     AnswerOption.objects.create(question=question, order=1, value=3, label="Всё время")
 
     with pytest.raises(UnknownQuestion):
-        submit_answer(token, question_id=question.id, option_id=None, raw_value="")
+        submit_answer(token, question_id=question.id, option_id=None, raw_value="", stage="baseline")
